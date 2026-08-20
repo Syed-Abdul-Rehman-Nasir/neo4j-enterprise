@@ -125,13 +125,23 @@ jobs:
       - name: Verify data counts
         run: |
           set -euo pipefail
-          OUT=$(cypher-shell -a bolt://localhost:7687 -u neo4j -p testpassword1234 --format plain \
-            "MATCH (n) RETURN labels(n)[0] AS label, count(n) AS cnt ORDER BY label;")
-          echo "$OUT"
-          echo "$OUT" | grep -E 'Employee[[:space:]]+10' || { echo "Expected 10 Employees" >&2; exit 1; }
-          echo "$OUT" | grep -E 'Application[[:space:]]+5' || { echo "Expected 5 Applications" >&2; exit 1; }
-          echo "$OUT" | grep -E 'Incident[[:space:]]+8' || { echo "Expected 8 Incidents" >&2; exit 1; }
-          echo "$OUT" | grep -E 'Department[[:space:]]+3' || { echo "Expected 3 Departments" >&2; exit 1; }
+          verify_count() {
+            local label="$1"
+            local expected="$2"
+            local actual
+            actual=$(cypher-shell -a bolt://localhost:7687 -u neo4j -p testpassword1234 --format plain \
+              "MATCH (n:\`${label}\`) RETURN count(n) AS count;" \
+              | tail -n 1 | tr -dc '0-9')
+            echo "${label}: ${actual}"
+            if [[ "${actual}" != "${expected}" ]]; then
+              echo "Expected ${expected} ${label} nodes, got ${actual:-unparseable}" >&2
+              exit 1
+            fi
+          }
+          verify_count Employee 10
+          verify_count Application 5
+          verify_count Incident 8
+          verify_count Department 3
 
       - name: Run pytest
         env:
