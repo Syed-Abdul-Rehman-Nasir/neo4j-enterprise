@@ -153,7 +153,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${NEO4J_PROD_URI:-}" ]; then
-            echo "NEO4J_PROD_URI not set — skipping live step (no production target)"
+            echo "NEO4J_PROD_URI not configured — skipping live step (no production target)"
             exit 0
           fi
           # Backup BEFORE migrations: if a migration fails or corrupts data, we still
@@ -184,7 +184,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${NEO4J_PROD_URI:-}" ]; then
-            echo "NEO4J_PROD_URI not set — skipping live step (no production target)"
+            echo "NEO4J_PROD_URI not configured — skipping live step (no production target)"
             exit 0
           fi
           USER="${NEO4J_PROD_USERNAME:-neo4j}"
@@ -208,13 +208,13 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${NEO4J_PROD_URI:-}" ]; then
-            echo "NEO4J_PROD_URI not set — skipping live step (no production target)"
+            echo "NEO4J_PROD_URI not configured — skipping live step (no production target)"
             echo "applied=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           MIGRATIONS=$(find cypher/migrations -name "*.cypher" ! -name "*rollback*" | sort)
           if [ -z "$MIGRATIONS" ]; then
-            echo "No migrations to apply"
+            echo "No migration files found — skipping"
             echo "applied=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -241,7 +241,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${NEO4J_PROD_URI:-}" ]; then
-            echo "NEO4J_PROD_URI not set — skipping live step (no production target)"
+            echo "NEO4J_PROD_URI not configured — skipping live step (no production target)"
             exit 0
           fi
           USER="${NEO4J_PROD_USERNAME:-neo4j}"
@@ -269,7 +269,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${NEO4J_PROD_URI:-}" ]; then
-            echo "NEO4J_PROD_URI not set — skipping live step (no production target)"
+            echo "NEO4J_PROD_URI not configured — skipping live step (no production target)"
             exit 0
           fi
           python -m pip install -r python/requirements.txt

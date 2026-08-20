@@ -31,16 +31,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install cypher-lint
-        run: pip install cypher-lint
-
-      - name: Lint all .cypher files
-        run: |
-          set -euo pipefail
-          find cypher/ -name "*.cypher" -print0 | while IFS= read -r -d '' f; do
-            echo "Linting $f"
-            cypher-lint --strict "$f"
-          done
+      - name: Lint Cypher
+        run: python scripts/validate_cypher.py
 
   test:
     name: Integration tests
