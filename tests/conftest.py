@@ -90,10 +90,13 @@ def wait_for_bolt(container: Neo4jContainer, timeout_s: float = 120.0) -> None:
 def neo4j_container():
     """Start Neo4j 5.23 Enterprise with APOC; tear down after the session."""
     container = (
-        Neo4jContainer("neo4j:5.23-enterprise")
+        Neo4jContainer(
+            "neo4j:5.23-enterprise",
+            username=NEO4J_USER,
+            password=NEO4J_PASSWORD,
+        )
         .with_env("NEO4J_ACCEPT_LICENSE_AGREEMENT", "yes")
         .with_env("NEO4J_PLUGINS", '["apoc"]')
-        .with_env("NEO4J_AUTH", f"{NEO4J_USER}/{NEO4J_PASSWORD}")
     )
     container.start()
     wait_for_bolt(container)

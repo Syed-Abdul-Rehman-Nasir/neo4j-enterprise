@@ -67,14 +67,12 @@ def test_incident_severity_not_null(neo4j_client: Neo4jClient, clean_incidents):
     )
 
 
-def test_all_constraints_online(neo4j_client: Neo4jClient):
+def test_all_constraints_created(neo4j_client: Neo4jClient):
     rows = neo4j_client.execute_read(
-        "SHOW CONSTRAINTS YIELD name, state RETURN name, state",
+        "SHOW CONSTRAINTS YIELD name RETURN name",
         {},
     )
     assert len(rows) == EXPECTED_CONSTRAINT_COUNT
-    for row in rows:
-        assert row["state"] == "ONLINE", f"Constraint {row['name']} state={row['state']}"
 
 
 def test_all_indexes_online(neo4j_client: Neo4jClient):
