@@ -37,18 +37,18 @@ def validate_file(path: Path) -> list:
     if not CYPHER_KEYWORDS.search(text):
         errors.append(f"{path}: no Cypher keywords found (MATCH/CREATE/MERGE/RETURN etc.)")
 
-    # Balanced parentheses
-    if text.count("(") != text.count(")"):
+    # Balanced parentheses (ignore // comment lines — docs often use "1)" lists)
+    if non_comment.count("(") != non_comment.count(")"):
         errors.append(
             f"{path}: unbalanced parentheses "
-            f"({text.count('(')} open vs {text.count(')')} close)"
+            f"({non_comment.count('(')} open vs {non_comment.count(')')} close)"
         )
 
     # Balanced curly braces
-    if text.count("{") != text.count("}"):
+    if non_comment.count("{") != non_comment.count("}"):
         errors.append(
             f"{path}: unbalanced curly braces "
-            f"({text.count('{')} open vs {text.count('}')} close)"
+            f"({non_comment.count('{')} open vs {non_comment.count('}')} close)"
         )
 
     # Warn if query files have no parameters

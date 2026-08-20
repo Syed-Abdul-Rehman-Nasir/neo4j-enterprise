@@ -10,6 +10,8 @@ on:
       - "cypher/**"
       - "python/**"
       - "tests/**"
+      - "scripts/**"
+      - ".github/workflows/neo4j-validate.yml"
       - "ci/.github/workflows/neo4j-validate.yml"
 
 env:
