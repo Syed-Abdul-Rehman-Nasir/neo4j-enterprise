@@ -1,0 +1,115 @@
+[
+  {
+    "name": "[P1] Neo4j Cluster Member Unreachable",
+    "type": "metric alert",
+    "query": "avg(last_3m):avg:neo4j.cluster.discovery.unreachable_members{*} > 0",
+    "message": "CRITICAL: Neo4j cluster has unreachable members. Quorum at risk. Check {{host.name}}. @pagerduty-neo4j-oncall",
+    "tags": [
+      "service:neo4j",
+      "severity:p1",
+      "team:dba"
+    ],
+    "priority": 1,
+    "options": {
+      "thresholds": {
+        "critical": 0
+      },
+      "notify_no_data": true,
+      "no_data_timeframe": 10,
+      "require_full_window": true,
+      "notify_audit": false,
+      "include_tags": true,
+      "evaluation_delay": 60,
+      "new_host_delay": 300,
+      "escalation_message": "Cluster members still unreachable. Escalate to Neo4j on-call and verify quorum before schema or failover operations."
+    }
+  },
+  {
+    "name": "[P2] Neo4j Query Latency p95 High",
+    "type": "metric alert",
+    "query": "avg(last_5m):p95:neo4j.db.query.execution.latency.milliseconds{*} > 5000",
+    "message": "WARNING: Query latency p95 exceeds 5s. Run CALL dbms.listQueries() to identify slow queries. Check for missing indexes.",
+    "tags": [
+      "service:neo4j",
+      "severity:p2",
+      "team:dba"
+    ],
+    "priority": 2,
+    "options": {
+      "thresholds": {
+        "critical": 5000
+      },
+      "notify_no_data": false,
+      "require_full_window": true,
+      "include_tags": true,
+      "evaluation_delay": 60,
+      "new_host_delay": 300
+    }
+  },
+  {
+    "name": "[P2] Neo4j Heap Utilization Critical",
+    "type": "metric alert",
+    "query": "avg(last_10m):(avg:neo4j.jvm.memory.heap.used_bytes{*} / avg:neo4j.jvm.memory.heap.max_bytes{*}) * 100 > 85",
+    "message": "WARNING: JVM heap above 85%. GC pressure likely. Check for large in-memory traversals. Do not restart without capturing thread dump.",
+    "tags": [
+      "service:neo4j",
+      "severity:p2",
+      "team:dba"
+    ],
+    "priority": 2,
+    "options": {
+      "thresholds": {
+        "critical": 85
+      },
+      "notify_no_data": false,
+      "require_full_window": true,
+      "include_tags": true,
+      "evaluation_delay": 60,
+      "new_host_delay": 300
+    }
+  },
+  {
+    "name": "[P2] Neo4j Page Cache Hit Ratio Degraded",
+    "type": "metric alert",
+    "query": "avg(last_10m):(sum:neo4j.db.page_cache.hits{*}.as_count() / (sum:neo4j.db.page_cache.hits{*}.as_count() + sum:neo4j.db.page_cache.misses{*}.as_count())) * 100 < 95",
+    "message": "WARNING: Page cache hit ratio below 95%. Working set may exceed cache size. Kill reporting queries and investigate recent data imports.",
+    "tags": [
+      "service:neo4j",
+      "severity:p2",
+      "team:dba"
+    ],
+    "priority": 2,
+    "options": {
+      "thresholds": {
+        "critical": 95
+      },
+      "notify_no_data": false,
+      "require_full_window": true,
+      "include_tags": true,
+      "evaluation_delay": 60,
+      "new_host_delay": 300
+    }
+  },
+  {
+    "name": "[P3] Neo4j Disk Usage High",
+    "type": "metric alert",
+    "query": "avg(last_5m):avg:system.disk.in_use{service:neo4j} * 100 > 75",
+    "message": "WARNING: Disk above 75% on Neo4j host. Check transaction log accumulation. Verify backups are running (logs prune only after checkpoint).",
+    "tags": [
+      "service:neo4j",
+      "severity:p3",
+      "team:dba"
+    ],
+    "priority": 3,
+    "options": {
+      "thresholds": {
+        "critical": 75
+      },
+      "notify_no_data": false,
+      "require_full_window": false,
+      "include_tags": true,
+      "evaluation_delay": 60,
+      "new_host_delay": 300
+    }
+  }
+]

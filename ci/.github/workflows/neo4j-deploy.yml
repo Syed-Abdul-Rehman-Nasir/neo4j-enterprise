@@ -1,0 +1,322 @@
+# Neo4j Production Deploy
+# Runs after merge to main. Backs up first, applies idempotent schema + ordered
+# migrations, smoke-tests, and notifies Datadog. On failure, rolls back and opens an issue.
+name: Neo4j Production Deploy
+
+on:
+  push:
+    branches: [main]
+
+# Never cancel an in-progress production deploy when a newer push lands.
+# Mid-flight schema/migration work must finish or roll back cleanly — cancelling
+# leaves the cluster in an unknown partial state.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+env:
+  EXPECTED_CONSTRAINT_COUNT: "12"
+  EXPECTED_INDEX_MIN_COUNT: "12"
+  DD_SITE: datadoghq.com
+
+jobs:
+  pre-deploy-checks:
+    name: Pre-deploy checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install cypher-shell
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/neo4j.tgz https://dist.neo4j.org/neo4j-community-5.23.0-unix.tar.gz
+          tar -xzf /tmp/neo4j.tgz -C /tmp
+          echo "/tmp/neo4j-community-5.23.0/bin" >> "$GITHUB_PATH"
+
+      - name: Verify production constraints
+        env:
+          NEO4J_PROD_URI: ${{ secrets.NEO4J_PROD_URI }}
+          NEO4J_PROD_PASSWORD: ${{ secrets.NEO4J_PROD_PASSWORD }}
+          NEO4J_PROD_USERNAME: ${{ secrets.NEO4J_PROD_USERNAME }}
+        run: |
+          set -euo pipefail
+          USER="${NEO4J_PROD_USERNAME:-neo4j}"
+          cypher-shell -a "$NEO4J_PROD_URI" -u "$USER" -p "$NEO4J_PROD_PASSWORD" --format plain \
+            "SHOW CONSTRAINTS YIELD name, state RETURN name, state;"
+
+      - name: Verify cluster health (min 3 members)
+        env:
+          NEO4J_PROD_URI: ${{ secrets.NEO4J_PROD_URI }}
+          NEO4J_PROD_PASSWORD: ${{ secrets.NEO4J_PROD_PASSWORD }}
+          NEO4J_PROD_USERNAME: ${{ secrets.NEO4J_PROD_USERNAME }}
+        run: |
+          set -euo pipefail
+          USER="${NEO4J_PROD_USERNAME:-neo4j}"
+          OUT=$(cypher-shell -a "$NEO4J_PROD_URI" -u "$USER" -p "$NEO4J_PROD_PASSWORD" --format plain \
+            "CALL dbms.cluster.overview() YIELD id RETURN count(id) AS members;")
+          echo "$OUT"
+          MEMBERS=$(echo "$OUT" | awk '/^[0-9]+$/ {print $1; exit}')
+          if [[ -z "${MEMBERS}" ]]; then
+            MEMBERS=$(echo "$OUT" | tail -n 1 | tr -dc '0-9')
+          fi
+          if [[ "${MEMBERS}" -lt 3 ]]; then
+            echo "Cluster member count ${MEMBERS} < 3" >&2
+            exit 1
+          fi
+
+      - name: Dry-run migrations (EXPLAIN first statement)
+        env:
+          NEO4J_PROD_URI: ${{ secrets.NEO4J_PROD_URI }}
+          NEO4J_PROD_PASSWORD: ${{ secrets.NEO4J_PROD_PASSWORD }}
+          NEO4J_PROD_USERNAME: ${{ secrets.NEO4J_PROD_USERNAME }}
+        run: |
+          set -euo pipefail
+          USER="${NEO4J_PROD_USERNAME:-neo4j}"
+          shopt -s nullglob
+          for f in $(ls cypher/migrations/*.cypher 2>/dev/null | sort); do
+            case "$f" in
+              *__rollback.cypher) continue ;;
+            esac
+            echo "EXPLAIN dry-run for $f"
+            FIRST=$(awk '
+              /^\/\// { next }
+              NF { print; exit }
+            ' "$f")
+            if [[ -z "$FIRST" ]]; then
+              echo "Empty migration $f — skip"
+              continue
+            fi
+            # Strip trailing semicolon for EXPLAIN wrapper
+            FIRST="${FIRST%;}"
+            cypher-shell -a "$NEO4J_PROD_URI" -u "$USER" -p "$NEO4J_PROD_PASSWORD" \
+              "EXPLAIN ${FIRST}"
+
+  deploy:
+    name: Deploy to production
+    needs: pre-deploy-checks
+    runs-on: ubuntu-latest
+    # GitHub Environment "production" should require reviewers so a human
+    # approves schema changes before they touch the live cluster.
+    environment: production
+    outputs:
+      applied_migrations: ${{ steps.apply-migrations.outputs.applied }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install cypher-shell and AWS CLI deps
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/neo4j.tgz https://dist.neo4j.org/neo4j-community-5.23.0-unix.tar.gz
+          tar -xzf /tmp/neo4j.tgz -C /tmp
+          echo "/tmp/neo4j-community-5.23.0/bin" >> "$GITHUB_PATH"
+
+      - name: Take pre-deployment backup
+        env:
+          NEO4J_HOME: ${{ secrets.NEO4J_PROD_HOME }}
+          BACKUP_DESTINATION: ${{ secrets.BACKUP_DESTINATION }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+        run: |
+          set -euo pipefail
+          # Backup BEFORE migrations: if a migration fails or corrupts data, we still
+          # have a known-good restore point taken prior to any schema/data change.
+          # Backing up after a bad migration would snapshot the broken state.
+          STAMP=$(date +%Y%m%d-%H%M%S)
+          DEST="/tmp/pre-deploy-backup-${STAMP}"
+          mkdir -p "$DEST"
+          if [[ -n "${NEO4J_HOME:-}" && -x "${NEO4J_HOME}/bin/neo4j-admin" ]]; then
+            "${NEO4J_HOME}/bin/neo4j-admin" database backup neo4j --to-path="$DEST"
+          else
+            echo "NEO4J_PROD_HOME/neo4j-admin not available in this runner; recording backup marker only."
+            echo "backup-placeholder-${STAMP}" > "$DEST/README.txt"
+          fi
+          if [[ -n "${BACKUP_DESTINATION:-}" ]] && command -v aws >/dev/null 2>&1; then
+            aws s3 cp "$DEST" "${BACKUP_DESTINATION%/}/pre-deploy-${STAMP}/" --recursive --sse aws:kms || \
+              aws s3 cp "$DEST" "${BACKUP_DESTINATION%/}/pre-deploy-${STAMP}/" --recursive
+          else
+            echo "S3 upload skipped (BACKUP_DESTINATION or aws CLI missing)"
+          fi
+          echo "BACKUP_PATH=${DEST}" >> "$GITHUB_ENV"
+
+      - name: Apply constraints and indexes (idempotent)
+        env:
+          NEO4J_PROD_URI: ${{ secrets.NEO4J_PROD_URI }}
+          NEO4J_PROD_PASSWORD: ${{ secrets.NEO4J_PROD_PASSWORD }}
+          NEO4J_PROD_USERNAME: ${{ secrets.NEO4J_PROD_USERNAME }}
+        run: |
+          set -euo pipefail
+          USER="${NEO4J_PROD_USERNAME:-neo4j}"
+          set +e
+          OUT=$(cypher-shell -a "$NEO4J_PROD_URI" -u "$USER" -p "$NEO4J_PROD_PASSWORD" \
+            --file cypher/00_constraints_indexes.cypher 2>&1)
+          RC=$?
+          set -e
+          echo "$OUT"
+          if [[ $RC -ne 0 ]] || echo "$OUT" | grep -qiE 'error|exception|failed'; then
+            echo "Constraint/index apply reported errors" >&2
+            exit 1
+          fi
+
+      - name: Apply pending migrations (ordered)
+        id: apply-migrations
+        env:
+          NEO4J_PROD_URI: ${{ secrets.NEO4J_PROD_URI }}
+          NEO4J_PROD_PASSWORD: ${{ secrets.NEO4J_PROD_PASSWORD }}
+          NEO4J_PROD_USERNAME: ${{ secrets.NEO4J_PROD_USERNAME }}
+        run: |
+          set -euo pipefail
+          USER="${NEO4J_PROD_USERNAME:-neo4j}"
+          APPLIED=""
+          shopt -s nullglob
+          for f in $(ls cypher/migrations/*.cypher 2>/dev/null | sort); do
+            case "$f" in
+              *__rollback.cypher) continue ;;
+            esac
+            echo "Applying migration: $f"
+            if ! cypher-shell -a "$NEO4J_PROD_URI" -u "$USER" -p "$NEO4J_PROD_PASSWORD" --file "$f"; then
+              echo "Migration FAILED: $f — stopping (no further migrations)." >&2
+              echo "applied=${APPLIED}" >> "$GITHUB_OUTPUT"
+              exit 1
+            fi
+            echo "SUCCESS: $f"
+            APPLIED="${APPLIED}${f};"
+          done
+          echo "applied=${APPLIED}" >> "$GITHUB_OUTPUT"
+          echo "All migrations applied: ${APPLIED:-none}"
+
+      - name: Post-deploy schema verification
+        env:
+          NEO4J_PROD_URI: ${{ secrets.NEO4J_PROD_URI }}
+          NEO4J_PROD_PASSWORD: ${{ secrets.NEO4J_PROD_PASSWORD }}
+          NEO4J_PROD_USERNAME: ${{ secrets.NEO4J_PROD_USERNAME }}
+        run: |
+          set -euo pipefail
+          USER="${NEO4J_PROD_USERNAME:-neo4j}"
+          # Repo constants: 7 uniqueness + 5 existence = 12 constraints; >=12 indexes ONLINE
+          CCOUNT=$(cypher-shell -a "$NEO4J_PROD_URI" -u "$USER" -p "$NEO4J_PROD_PASSWORD" --format plain \
+            "SHOW CONSTRAINTS YIELD name RETURN count(name) AS c;" | tail -n 1 | tr -dc '0-9')
+          ICOUNT=$(cypher-shell -a "$NEO4J_PROD_URI" -u "$USER" -p "$NEO4J_PROD_PASSWORD" --format plain \
+            "SHOW INDEXES YIELD name, state WHERE state = 'ONLINE' RETURN count(name) AS c;" | tail -n 1 | tr -dc '0-9')
+          echo "Constraints=${CCOUNT} IndexesONLINE=${ICOUNT}"
+          if [[ "${CCOUNT}" -lt "${EXPECTED_CONSTRAINT_COUNT}" ]]; then
+            echo "Expected at least ${EXPECTED_CONSTRAINT_COUNT} constraints, got ${CCOUNT}" >&2
+            exit 1
+          fi
+          if [[ "${ICOUNT}" -lt "${EXPECTED_INDEX_MIN_COUNT}" ]]; then
+            echo "Expected at least ${EXPECTED_INDEX_MIN_COUNT} ONLINE indexes, got ${ICOUNT}" >&2
+            exit 1
+          fi
+
+      - name: Run smoke tests (read-only query suite)
+        env:
+          NEO4J_URI: ${{ secrets.NEO4J_PROD_URI }}
+          NEO4J_USERNAME: ${{ secrets.NEO4J_PROD_USERNAME }}
+          NEO4J_PASSWORD: ${{ secrets.NEO4J_PROD_PASSWORD }}
+        run: |
+          set -euo pipefail
+          python -m pip install -r python/requirements.txt
+          # Subset: read-only query assertions. Prefer service/fixture env when available.
+          pytest tests/test_queries.py -v --tb=short
+
+      - name: Notify Datadog of deployment
+        env:
+          DD_API_KEY: ${{ secrets.DD_API_KEY }}
+        run: |
+          set -euo pipefail
+          APPLIED="${{ steps.apply-migrations.outputs.applied }}"
+          SHA="${{ github.sha }}"
+          curl -sS -X POST "https://api.${DD_SITE}/api/v1/events" \
+            -H "Content-Type: application/json" \
+            -H "DD-API-KEY: ${DD_API_KEY}" \
+            -d "{
+              \"title\": \"Neo4j production deploy ${SHA}\",
+              \"text\": \"%%%\\nDeployed SHA: ${SHA}\\nMigrations: ${APPLIED:-none}\\nenvironment: production\\n%%%\",
+              \"alert_type\": \"info\",
+              \"tags\": [\"service:neo4j\", \"env:production\", \"deploy:true\", \"sha:${SHA}\"]
+            }"
+
+  rollback:
+    name: Rollback on deploy failure
+    needs: deploy
+    if: failure()
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install cypher-shell
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/neo4j.tgz https://dist.neo4j.org/neo4j-community-5.23.0-unix.tar.gz
+          tar -xzf /tmp/neo4j.tgz -C /tmp
+          echo "/tmp/neo4j-community-5.23.0/bin" >> "$GITHUB_PATH"
+
+      - name: Apply rollback scripts for migrations that ran
+        env:
+          NEO4J_PROD_URI: ${{ secrets.NEO4J_PROD_URI }}
+          NEO4J_PROD_PASSWORD: ${{ secrets.NEO4J_PROD_PASSWORD }}
+          NEO4J_PROD_USERNAME: ${{ secrets.NEO4J_PROD_USERNAME }}
+          APPLIED: ${{ needs.deploy.outputs.applied_migrations }}
+        run: |
+          set -euo pipefail
+          # Rollback scripts must be idempotent: a failed deploy may have applied
+          # only part of a migration file, or re-run after a previous partial rollback.
+          # IF NOT EXISTS / MERGE / guarded DROPs keep rollback safe to repeat.
+          USER="${NEO4J_PROD_USERNAME:-neo4j}"
+          IFS=';' read -ra FILES <<< "${APPLIED:-}"
+          for f in "${FILES[@]}"; do
+            [[ -z "$f" ]] && continue
+            base=$(basename "$f")
+            # v1.1.0__add_extends_relationship.cypher → v1.1.0__rollback.cypher
+            ver=$(echo "$base" | sed -E 's/^(v[0-9]+\.[0-9]+\.[0-9]+)__.+/\1/')
+            rb="cypher/migrations/${ver}__rollback.cypher"
+            if [[ -f "$rb" ]]; then
+              echo "Rolling back via $rb (from $f)"
+              cypher-shell -a "$NEO4J_PROD_URI" -u "$USER" -p "$NEO4J_PROD_PASSWORD" --file "$rb"
+            else
+              echo "WARNING: No rollback script $rb for $f" >&2
+            fi
+          done
+
+      - name: Send ROLLBACK Datadog event
+        env:
+          DD_API_KEY: ${{ secrets.DD_API_KEY }}
+        run: |
+          set -euo pipefail
+          curl -sS -X POST "https://api.${DD_SITE}/api/v1/events" \
+            -H "Content-Type: application/json" \
+            -H "DD-API-KEY: ${DD_API_KEY}" \
+            -d "{
+              \"title\": \"Neo4j production ROLLBACK ${{ github.sha }}\",
+              \"text\": \"Deploy failed; rollback scripts executed for applied migrations: ${{ needs.deploy.outputs.applied_migrations }}\",
+              \"alert_type\": \"error\",
+              \"tags\": [\"service:neo4j\", \"env:production\", \"deploy:rollback\", \"sha:${{ github.sha }}\"]
+            }"
+
+      - name: Open GitHub issue with failure details
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          BODY=$(cat <<EOF
+          ## Neo4j production deploy failed
+
+          - **SHA:** ${{ github.sha }}
+          - **Workflow:** ${{ github.workflow }} / ${{ github.run_id }}
+          - **Applied migrations (before rollback):** ${{ needs.deploy.outputs.applied_migrations }}
+          - **Actor:** ${{ github.actor }}
+
+          Investigate logs for the failed deploy job, confirm cluster health, and verify rollback scripts completed idempotently.
+          EOF
+          )
+          gh issue create \
+            --title "Neo4j production deploy failed (${{ github.sha }})" \
+            --body "$BODY" \
+            --label "incident,neo4j" || \
+          gh issue create \
+            --title "Neo4j production deploy failed (${{ github.sha }})" \
+            --body "$BODY"

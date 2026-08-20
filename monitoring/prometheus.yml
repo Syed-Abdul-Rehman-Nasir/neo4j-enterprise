@@ -1,0 +1,22 @@
+# Prometheus scrape config for Neo4j Enterprise metrics.
+# Mounted by docker-compose at: /etc/prometheus/prometheus.yml
+# Neo4j exposes Prometheus metrics on port 2004 (server.metrics.prometheus.endpoint).
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: neo4j
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['neo4j:2004']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'neo4j_(db_page_cache|jvm|db_query|db_transaction|cluster).*'
+        action: keep

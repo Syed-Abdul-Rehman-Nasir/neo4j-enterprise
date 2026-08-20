@@ -1,0 +1,362 @@
+{
+  "title": "Neo4j Enterprise — Production Health Dashboard",
+  "description": "Production health overview for Neo4j Enterprise: query latency, page cache, heap, transactions, cluster, GC, store growth, Bolt, and incident hotspot Cypher.",
+  "layout_type": "ordered",
+  "widgets": [
+    {
+      "definition": {
+        "title": "Query Performance",
+        "title_size": "16",
+        "title_align": "left",
+        "type": "timeseries",
+        "requests": [
+          {
+            "display_type": "line",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "p50",
+                "query": "p50:neo4j.db.query.execution.latency.milliseconds{*}"
+              },
+              {
+                "data_source": "metrics",
+                "name": "p95",
+                "query": "p95:neo4j.db.query.execution.latency.milliseconds{*}"
+              },
+              {
+                "data_source": "metrics",
+                "name": "p99",
+                "query": "p99:neo4j.db.query.execution.latency.milliseconds{*}"
+              }
+            ],
+            "response_format": "timeseries",
+            "style": {
+              "palette": "dog_classic",
+              "line_type": "solid",
+              "line_width": "normal"
+            }
+          }
+        ],
+        "yaxis": {
+          "label": "milliseconds",
+          "include_zero": true
+        },
+        "show_legend": true
+      }
+    },
+    {
+      "definition": {
+        "title": "Page Cache Hit Ratio",
+        "title_size": "16",
+        "title_align": "left",
+        "type": "query_value",
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "hits",
+                "query": "sum:neo4j.db.page_cache.hits{*}.as_count()"
+              },
+              {
+                "data_source": "metrics",
+                "name": "misses",
+                "query": "sum:neo4j.db.page_cache.misses{*}.as_count()"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "hits / (hits + misses) * 100"
+              }
+            ],
+            "conditional_formats": [
+              {
+                "comparator": ">",
+                "value": 99,
+                "palette": "white_on_green"
+              },
+              {
+                "comparator": ">",
+                "value": 95,
+                "palette": "white_on_yellow"
+              },
+              {
+                "comparator": "<",
+                "value": 95,
+                "palette": "white_on_red"
+              }
+            ]
+          }
+        ],
+        "autoscale": true,
+        "precision": 2,
+        "custom_unit": "%"
+      }
+    },
+    {
+      "definition": {
+        "title": "JVM Heap Utilization",
+        "title_size": "16",
+        "title_align": "left",
+        "type": "timeseries",
+        "requests": [
+          {
+            "display_type": "line",
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "used",
+                "query": "avg:neo4j.jvm.memory.heap.used_bytes{*}"
+              },
+              {
+                "data_source": "metrics",
+                "name": "max",
+                "query": "avg:neo4j.jvm.memory.heap.max_bytes{*}"
+              }
+            ],
+            "formulas": [
+              {
+                "alias": "heap_utilization_pct",
+                "formula": "used / max * 100"
+              }
+            ]
+          }
+        ],
+        "markers": [
+          {
+            "value": "y = 85",
+            "display_type": "error dashed",
+            "label": "Critical 85%"
+          }
+        ],
+        "yaxis": {
+          "label": "%",
+          "min": "0",
+          "max": "100",
+          "include_zero": true
+        },
+        "show_legend": true
+      }
+    },
+    {
+      "definition": {
+        "title": "Active Transactions",
+        "title_size": "16",
+        "title_align": "left",
+        "type": "timeseries",
+        "requests": [
+          {
+            "display_type": "line",
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "active",
+                "query": "avg:neo4j.db.transaction.active{*}"
+              }
+            ],
+            "formulas": [
+              {
+                "alias": "active_transactions",
+                "formula": "anomalies(active, 'basic', 2)"
+              }
+            ]
+          }
+        ],
+        "show_legend": true,
+        "yaxis": {
+          "label": "transactions",
+          "include_zero": true
+        }
+      }
+    },
+    {
+      "definition": {
+        "title": "Transaction Throughput",
+        "title_size": "16",
+        "title_align": "left",
+        "type": "timeseries",
+        "requests": [
+          {
+            "display_type": "line",
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "committed",
+                "query": "sum:neo4j.db.transaction.committed_total{*}.as_rate()"
+              },
+              {
+                "data_source": "metrics",
+                "name": "rollbacks",
+                "query": "sum:neo4j.db.transaction.rollbacks_total{*}.as_rate()"
+              }
+            ],
+            "style": {
+              "palette": "dog_classic",
+              "line_type": "solid",
+              "line_width": "normal"
+            }
+          }
+        ],
+        "show_legend": true,
+        "yaxis": {
+          "label": "tx/s",
+          "include_zero": true
+        }
+      }
+    },
+    {
+      "definition": {
+        "title": "Cluster Health",
+        "title_size": "16",
+        "title_align": "left",
+        "type": "table",
+        "requests": [
+          {
+            "response_format": "scalar",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "replication_lag",
+                "query": "avg:neo4j.cluster.raft.replication_lag{*} by {host,neo4j_role,neo4j_status}"
+              }
+            ],
+            "formulas": [
+              {
+                "formula": "replication_lag",
+                "limit": {
+                  "count": 50,
+                  "order": "desc"
+                }
+              }
+            ]
+          }
+        ],
+        "has_search_bar": "auto"
+      }
+    },
+    {
+      "definition": {
+        "title": "GC Pause Time",
+        "title_size": "16",
+        "title_align": "left",
+        "type": "timeseries",
+        "requests": [
+          {
+            "display_type": "line",
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "gc_pause",
+                "query": "avg:neo4j.jvm.gc.pause.time{*}.as_rate()"
+              }
+            ]
+          }
+        ],
+        "markers": [
+          {
+            "value": "y = 0.5",
+            "display_type": "warning dashed",
+            "label": "Alert 500ms"
+          }
+        ],
+        "yaxis": {
+          "label": "seconds (rate)",
+          "include_zero": true
+        },
+        "show_legend": true
+      }
+    },
+    {
+      "definition": {
+        "title": "Store Size Growth",
+        "title_size": "16",
+        "title_align": "left",
+        "type": "timeseries",
+        "live_span": "1w",
+        "requests": [
+          {
+            "display_type": "line",
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "store_size",
+                "query": "avg:neo4j.db.store.size.total.bytes{*}"
+              }
+            ],
+            "style": {
+              "palette": "cool",
+              "line_type": "solid",
+              "line_width": "normal"
+            }
+          }
+        ],
+        "show_legend": true,
+        "yaxis": {
+          "label": "bytes",
+          "include_zero": false,
+          "scale": "linear"
+        }
+      }
+    },
+    {
+      "definition": {
+        "title": "Bolt Connection Rate",
+        "title_size": "16",
+        "title_align": "left",
+        "type": "timeseries",
+        "requests": [
+          {
+            "display_type": "line",
+            "response_format": "timeseries",
+            "queries": [
+              {
+                "data_source": "metrics",
+                "name": "opened",
+                "query": "sum:neo4j.bolt.connections.opened_total{*}.as_rate()"
+              },
+              {
+                "data_source": "metrics",
+                "name": "closed",
+                "query": "sum:neo4j.bolt.connections.closed_total{*}.as_rate()"
+              }
+            ]
+          }
+        ],
+        "show_legend": true,
+        "yaxis": {
+          "label": "connections/s",
+          "include_zero": true
+        }
+      }
+    },
+    {
+      "definition": {
+        "title": "Incident Hotspot Query (Q3)",
+        "title_size": "16",
+        "title_align": "left",
+        "type": "note",
+        "content": "## High-incident applications (Q3)\n\nUse this Cypher during latency or application incidents to find apps with more than `$minIncidents` related incidents.\n\n**Instructions**\n1. Open Neo4j Browser or `cypher-shell` against the affected database.\n2. Set `:param minIncidents => 3` (or lower during triage).\n3. Run the production query below.\n4. Cross-check slow queries via `CALL dbms.listQueries()` and the troubleshooting runbook.\n\n```cypher\nMATCH (a:Application)<-[:AFFECTS]-(i:Incident)\nWITH a,\n     count(i) AS incident_count,\n     collect(i.title) AS incident_titles,\n     collect(i.severity) AS severities\nWHERE incident_count > $minIncidents\nRETURN a.name AS application_name,\n       a.applicationId AS applicationId,\n       a.tier AS tier,\n       incident_count,\n       incident_titles,\n       severities\nORDER BY incident_count DESC;\n```\n\nSource: `cypher/queries/q3_high_incident_apps.cypher`",
+        "background_color": "white",
+        "font_size": "14",
+        "text_align": "left",
+        "vertical_align": "top",
+        "show_tick": false
+      }
+    }
+  ],
+  "template_variables": [
+    {
+      "name": "env",
+      "prefix": "env",
+      "available_values": ["prod", "staging"],
+      "default": "prod"
+    }
+  ],
+  "reflow_type": "auto"
+}

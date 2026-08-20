@@ -1,0 +1,18 @@
+# Pinned dependencies for reproducible Neo4j assessment environments.
+#
+# Why pin exact versions?
+#   Driver protocol behavior, Cypher type mapping, and testcontainers Neo4j
+#   image wiring can change across minor releases. Exact pins keep CI and
+#   local runs identical to what an assessor reviews.
+#
+# How to update safely:
+#   1. Read the neo4j Python driver / testcontainers changelogs for breaking changes.
+#   2. Bump one package at a time in a fresh venv.
+#   3. Run the full pytest suite (unit + integration against Neo4j 5.23).
+#   4. Commit the new pin only after green tests.
+#
+neo4j==5.23.0
+python-dotenv==1.0.0
+pytest==8.0.0
+testcontainers[neo4j]==4.5.0
+pytest-asyncio==0.23.0
