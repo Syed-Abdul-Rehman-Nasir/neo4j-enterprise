@@ -144,6 +144,7 @@ jobs:
 
       - name: Take pre-deployment backup
         env:
+          NEO4J_PROD_URI: ${{ secrets.NEO4J_PROD_URI }}
           NEO4J_HOME: ${{ secrets.NEO4J_PROD_HOME }}
           BACKUP_DESTINATION: ${{ secrets.BACKUP_DESTINATION }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -151,6 +152,10 @@ jobs:
           AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
         run: |
           set -euo pipefail
+          if [ -z "${NEO4J_PROD_URI:-}" ]; then
+            echo "NEO4J_PROD_URI not set — skipping live step (no production target)"
+            exit 0
+          fi
           # Backup BEFORE migrations: if a migration fails or corrupts data, we still
           # have a known-good restore point taken prior to any schema/data change.
           # Backing up after a bad migration would snapshot the broken state.
@@ -178,6 +183,10 @@ jobs:
           NEO4J_PROD_USERNAME: ${{ secrets.NEO4J_PROD_USERNAME }}
         run: |
           set -euo pipefail
+          if [ -z "${NEO4J_PROD_URI:-}" ]; then
+            echo "NEO4J_PROD_URI not set — skipping live step (no production target)"
+            exit 0
+          fi
           USER="${NEO4J_PROD_USERNAME:-neo4j}"
           set +e
           OUT=$(cypher-shell -a "$NEO4J_PROD_URI" -u "$USER" -p "$NEO4J_PROD_PASSWORD" \
@@ -198,13 +207,20 @@ jobs:
           NEO4J_PROD_USERNAME: ${{ secrets.NEO4J_PROD_USERNAME }}
         run: |
           set -euo pipefail
+          if [ -z "${NEO4J_PROD_URI:-}" ]; then
+            echo "NEO4J_PROD_URI not set — skipping live step (no production target)"
+            echo "applied=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          MIGRATIONS=$(find cypher/migrations -name "*.cypher" ! -name "*rollback*" | sort)
+          if [ -z "$MIGRATIONS" ]; then
+            echo "No migrations to apply"
+            echo "applied=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           USER="${NEO4J_PROD_USERNAME:-neo4j}"
           APPLIED=""
-          shopt -s nullglob
-          for f in $(ls cypher/migrations/*.cypher 2>/dev/null | sort); do
-            case "$f" in
-              *__rollback.cypher) continue ;;
-            esac
+          for f in $MIGRATIONS; do
             echo "Applying migration: $f"
             if ! cypher-shell -a "$NEO4J_PROD_URI" -u "$USER" -p "$NEO4J_PROD_PASSWORD" --file "$f"; then
               echo "Migration FAILED: $f — stopping (no further migrations)." >&2
@@ -224,6 +240,10 @@ jobs:
           NEO4J_PROD_USERNAME: ${{ secrets.NEO4J_PROD_USERNAME }}
         run: |
           set -euo pipefail
+          if [ -z "${NEO4J_PROD_URI:-}" ]; then
+            echo "NEO4J_PROD_URI not set — skipping live step (no production target)"
+            exit 0
+          fi
           USER="${NEO4J_PROD_USERNAME:-neo4j}"
           # Repo constants: 7 uniqueness + 5 existence = 12 constraints; >=12 indexes ONLINE
           CCOUNT=$(cypher-shell -a "$NEO4J_PROD_URI" -u "$USER" -p "$NEO4J_PROD_PASSWORD" --format plain \
@@ -242,11 +262,16 @@ jobs:
 
       - name: Run smoke tests (read-only query suite)
         env:
+          NEO4J_PROD_URI: ${{ secrets.NEO4J_PROD_URI }}
           NEO4J_URI: ${{ secrets.NEO4J_PROD_URI }}
           NEO4J_USERNAME: ${{ secrets.NEO4J_PROD_USERNAME }}
           NEO4J_PASSWORD: ${{ secrets.NEO4J_PROD_PASSWORD }}
         run: |
           set -euo pipefail
+          if [ -z "${NEO4J_PROD_URI:-}" ]; then
+            echo "NEO4J_PROD_URI not set — skipping live step (no production target)"
+            exit 0
+          fi
           python -m pip install -r python/requirements.txt
           # Subset: read-only query assertions. Prefer service/fixture env when available.
           pytest tests/test_queries.py -v --tb=short
@@ -256,6 +281,10 @@ jobs:
           DD_API_KEY: ${{ secrets.DD_API_KEY }}
         run: |
           set -euo pipefail
+          if [ -z "${DD_API_KEY:-}" ]; then
+            echo "DD_API_KEY not set — skipping Datadog notify"
+            exit 0
+          fi
           APPLIED="${{ steps.apply-migrations.outputs.applied }}"
           SHA="${{ github.sha }}"
           curl -sS -X POST "https://api.${DD_SITE}/api/v1/events" \
