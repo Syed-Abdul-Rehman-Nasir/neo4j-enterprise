@@ -26,10 +26,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -61,10 +61,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -101,11 +101,12 @@ jobs:
       - name: Verify constraints ONLINE
         run: |
           set -euo pipefail
-          OUT=$(cypher-shell -a bolt://localhost:7687 -u neo4j -p testpassword1234 --format plain \
-            "SHOW CONSTRAINTS YIELD name, state RETURN name, state;")
-          echo "$OUT"
-          if echo "$OUT" | grep -v '^name' | grep -v '^$' | grep -v ONLINE; then
-            echo "One or more constraints are not ONLINE" >&2
+          OFFLINE=$(cypher-shell -a bolt://localhost:7687 -u neo4j -p testpassword1234 --format plain \
+            "SHOW CONSTRAINTS YIELD state WHERE state <> 'ONLINE' RETURN count(*) AS offline;" \
+            | tail -n 1 | tr -dc '0-9')
+          echo "Non-ONLINE constraints: ${OFFLINE}"
+          if [[ "${OFFLINE}" != "0" ]]; then
+            echo "Expected 0 non-ONLINE constraints, got ${OFFLINE:-unparseable}" >&2
             exit 1
           fi
 
@@ -139,7 +140,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: test-results
           path: test-results.xml
@@ -150,10 +151,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
