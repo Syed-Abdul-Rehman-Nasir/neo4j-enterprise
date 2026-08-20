@@ -339,14 +339,14 @@ jobs:
 
           BODY="## Neo4j production deploy failed
 
-- **SHA:** ${{ github.sha }}
-- **Workflow:** Neo4j Production Deploy / ${{ github.run_id }}
-- **Actor:** ${{ github.actor }}
-- **Branch:** ${{ github.ref_name }}
+          - **SHA:** ${{ github.sha }}
+          - **Workflow:** Neo4j Production Deploy / ${{ github.run_id }}
+          - **Actor:** ${{ github.actor }}
+          - **Branch:** ${{ github.ref_name }}
 
-Investigate logs for the failed deploy job, confirm cluster health, and verify rollback scripts completed idempotently.
+          Investigate logs for the failed deploy job, confirm cluster health, and verify rollback scripts completed idempotently.
 
-[View run logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
+          [View run logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})"
 
           gh issue create \
             --title "Neo4j production deploy failed (${{ github.sha }})" \
