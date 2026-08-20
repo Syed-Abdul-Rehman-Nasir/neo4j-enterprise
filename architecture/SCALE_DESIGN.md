@@ -358,6 +358,64 @@ Interactive API reads may share the analytics replicas under light load; under p
 
 ---
 
+## Monitoring at Scale
+
+### Metric cardinality at 5M nodes / 100M relationships
+
+At this scale, standard metrics require time-window aggregation:
+- Query latency p95 must be computed from a histogram, not individual samples
+- Transaction throughput should be measured as a rate (tx/min) not absolute count
+- Page cache hit ratio must be derived: hits_total / (hits_total + misses_total)
+
+### Key operational metrics for a 100M-edge graph
+
+| Metric | Scale-specific concern |
+|---|---|
+| `neo4j.db.page_cache.hit_ratio` | At 20GB store, requires 24+ GB page cache to stay above 99% |
+| `neo4j.cluster.raft.replication.lag` | At high write throughput, secondaries can lag. Alert at 5s, page at 30s |
+| `neo4j.db.ids_in_use.relationship_ids` | Approaching max long (2^63) is a theoretical concern at extreme scale |
+| `neo4j.db.store.size.total.bytes` | Growth rate matters more than absolute size — alert on > 5% daily growth |
+| `neo4j.jvm.gc.pause.time` | At 16GB heap, G1GC pauses should stay under 200ms. STW pause > 1s = alert |
+
+### Blast radius pre-computation monitoring
+
+The scheduled blast radius job (see scale_model.cypher) must itself be monitored:
+- Track: `apoc.periodic.iterate` completion rate
+- Alert: if blast_radius_computed_at on any Tier-1 service is more than 8 hours old
+- Dashboard: count of services with stale pre-computed blast radius
+
+---
+
+## Deployment at Scale
+
+### Zero-downtime schema changes
+
+At 100M relationships, adding an index takes time. Strategy:
+1. `CREATE INDEX idx_name IF NOT EXISTS FOR (...) ON (...)` — starts population in background
+2. Monitor: `SHOW INDEXES YIELD name, state WHERE state = 'POPULATING'`
+3. Only deploy application code that uses the new index AFTER state = 'ONLINE'
+4. Never drop an index that is in use by running queries
+
+### Data migration at scale
+
+For changes that touch existing data (e.g., adding a property to 5M nodes):
+- Use `apoc.periodic.iterate` with batch size 10,000
+- Run during low-traffic window
+- Monitor batch progress with a counter property on a control node
+- Always test on staging with a 10% data sample first
+
+### Kubernetes deployment
+
+Production Neo4j on Kubernetes:
+- StatefulSet (not Deployment) — preserves pod identity across restarts
+- Persistent Volume Claims: fast SSD storage class for data/, separate PVC for logs/
+- Pod anti-affinity: ensure no two core members land on the same node
+- Resource limits: set memory limit = total RAM (heap + pagecache + OS headroom)
+- Liveness probe: cypher-shell "RETURN 1" with 10s timeout
+- Readiness probe: `admin/cluster_health_check.sh --format json` exit 0
+
+---
+
 ## Security at Scale
 
 ### Database-level isolation

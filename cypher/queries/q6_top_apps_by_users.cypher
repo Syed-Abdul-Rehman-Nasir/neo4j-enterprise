@@ -14,14 +14,20 @@
 //   Aggregate unique users and department names in WITH, then ORDER BY + LIMIT
 //   so only the top $limit apps are returned.
 //
+// WHY applicationId ASC TIE-BREAK:
+//   Multiple apps can share the same unique_users count (sample: DeployPortal,
+//   HRConnect, DataLakeDash all have 2). Without a secondary ORDER BY key,
+//   Neo4j may return ties in non-deterministic order — breaking test assertions
+//   and making LIMIT-based paging unstable in production APIs.
+//
 // INDEXES USED:
 //   - Application.applicationId uniqueness
 //   - Application.tier / Application.owner range indexes (returned / filterable)
 //
 // EXPECTED RESULT SHAPE:
 //   | application_name | applicationId | owner | tier | unique_users | departments |
-//   Sample ($limit = 3): FinanceSuite (4), then DeployPortal / HRConnect /
-//   DataLakeDash (2 each) — exact 2nd/3rd depend on stable sort ties.
+//   Sample ($limit = 3): FinanceSuite (4), then DeployPortal / DataLakeDash /
+//   HRConnect (2 each) — ties broken by applicationId ASC for stable order.
 // =============================================================================
 
 // --- PRODUCTION (parameters) -------------------------------------------------
@@ -38,7 +44,7 @@ RETURN a.name AS application_name,
        a.tier AS tier,
        unique_users,
        departments
-ORDER BY unique_users DESC
+ORDER BY unique_users DESC, applicationId ASC
 LIMIT $limit;
 
 // --- TEST (hardcoded; run immediately) --------------------------------------
@@ -54,7 +60,7 @@ RETURN a.name AS application_name,
        a.tier AS tier,
        unique_users,
        departments
-ORDER BY unique_users DESC
+ORDER BY unique_users DESC, applicationId ASC
 LIMIT 3;
 
 // --- EXPLAIN ----------------------------------------------------------------
@@ -63,7 +69,7 @@ LIMIT 3;
 // OPTIONAL MATCH (e)-[:BELONGS_TO]->(d:Department)
 // WITH a, count(DISTINCT e) AS unique_users, collect(DISTINCT d.name) AS departments
 // RETURN a.name, a.applicationId, a.owner, a.tier, unique_users, departments
-// ORDER BY unique_users DESC
+// ORDER BY unique_users DESC, applicationId ASC
 // LIMIT $limit;
 //
 // Expected plan shape:
@@ -71,4 +77,4 @@ LIMIT 3;
 //   - Expand(Incoming) USES → Employee
 //   - OptionalExpand BELONGS_TO → Department
 //   - EagerAggregation (Distinct count / collect)
-//   - Sort + Limit
+//   - Sort (unique_users DESC, applicationId ASC) + Limit

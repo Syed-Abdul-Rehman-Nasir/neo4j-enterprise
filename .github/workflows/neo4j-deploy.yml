@@ -132,6 +132,18 @@ jobs:
     outputs:
       applied_migrations: ${{ steps.apply-migrations.outputs.applied }}
     steps:
+      - name: Verify required secrets are present
+        run: |
+          if [[ -z "${{ secrets.NEO4J_PROD_URI }}" ]]; then
+            echo "ERROR: NEO4J_PROD_URI secret is not set. Cannot deploy to production."
+            exit 1
+          fi
+          if [[ -z "${{ secrets.NEO4J_PROD_PASSWORD }}" ]]; then
+            echo "ERROR: NEO4J_PROD_PASSWORD secret is not set. Cannot deploy to production."
+            exit 1
+          fi
+          echo "✅ Required secrets present"
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -326,18 +338,18 @@ jobs:
           # only part of a migration file, or re-run after a previous partial rollback.
           # IF NOT EXISTS / MERGE / guarded DROPs keep rollback safe to repeat.
           USER="${NEO4J_PROD_USERNAME:-neo4j}"
-          IFS=';' read -ra FILES <<< "${APPLIED:-}"
-          for f in "${FILES[@]}"; do
-            [[ -z "$f" ]] && continue
-            base=$(basename "$f")
-            # v1.1.0__add_extends_relationship.cypher → v1.1.0__rollback.cypher
-            ver=$(echo "$base" | sed -E 's/^(v[0-9]+\.[0-9]+\.[0-9]+)__.+/\1/')
-            rb="cypher/migrations/${ver}__rollback.cypher"
-            if [[ -f "$rb" ]]; then
-              echo "Rolling back via $rb (from $f)"
-              cypher-shell -a "$NEO4J_PROD_URI" -u "$USER" -p "$NEO4J_PROD_PASSWORD" --file "$rb"
+          IFS=';' read -ra APPLIED_MIGRATIONS <<< "${APPLIED:-}"
+          # Find rollback files for migrations that were applied
+          for migration in "${APPLIED_MIGRATIONS[@]}"; do
+            [[ -z "$migration" ]] && continue
+            version=$(echo "$migration" | grep -oP 'v\d+\.\d+\.\d+' | head -1)
+            rollback_file=$(ls cypher/migrations/${version}__*rollback*.cypher 2>/dev/null | head -1)
+            if [[ -f "$rollback_file" ]]; then
+              echo "Rolling back: $rollback_file"
+              cypher-shell -a "$NEO4J_PROD_URI" -u "$USER" -p "$NEO4J_PROD_PASSWORD" < "$rollback_file"
             else
-              echo "WARNING: No rollback script $rb for $f" >&2
+              echo "WARNING: No rollback file found for $version — manual intervention required"
+              exit 1
             fi
           done
 

@@ -6,14 +6,18 @@ All Cypher lives in module-level constants and uses ``$parameters`` only
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from .exceptions import DataError, Neo4jClientError, QueryError
 from .models import (
     ApplicationStats,
+    ApplicationSummary,
     DependencyChain,
+    DependencyPath,
     FullDownstreamChain,
     ImpactedEmployee,
+    IncidentSummary,
+    SharedDatabaseEmployee,
 )
 
 if TYPE_CHECKING:
@@ -96,6 +100,63 @@ RETURN a.name AS application,
        srv.os AS serverOs,
        r1.weight AS criticality
 ORDER BY criticality DESC
+"""
+
+QUERY_GET_DEPENDENCY_PATHS = """
+MATCH (a:Application {applicationId: $applicationId})
+MATCH (db:Database {databaseId: $databaseId})
+MATCH path = (a)-[:DEPENDS_ON*1..3]->(s:Service)-[:READS_FROM]->(db)
+RETURN [n IN nodes(path) | coalesce(n.name, n.applicationId, n.serviceId, n.databaseId)] AS path_nodes,
+       length(path) AS hops
+ORDER BY hops ASC
+"""
+
+QUERY_GET_TOP_APPLICATIONS_BY_USERS = """
+MATCH (a:Application)<-[:USES]-(e:Employee)
+WITH a, count(DISTINCT e) AS uniqueUsers
+RETURN a.name AS name,
+       a.applicationId AS applicationId,
+       a.tier AS tier,
+       uniqueUsers,
+       0 AS incidentCount
+ORDER BY uniqueUsers DESC, applicationId ASC
+LIMIT $limit
+"""
+
+QUERY_GET_SHARED_DATABASE_EMPLOYEES = """
+MATCH (e:Employee)-[:USES]->(a:Application)-[:DEPENDS_ON*1..3]->(s:Service)-[:READS_FROM]->(db:Database)
+WITH e, db, collect(DISTINCT a) AS apps
+WHERE size(apps) >= $minApps
+RETURN e.name AS employee,
+       db.name AS shared_database,
+       [x IN apps | x.name] AS applications,
+       size(apps) AS app_count
+ORDER BY app_count DESC
+"""
+
+QUERY_GET_APPLICATIONS_WITH_NO_INCIDENTS = """
+MATCH (a:Application)
+WHERE NOT EXISTS {
+  MATCH (i:Incident)-[:AFFECTS]->(a)
+  WHERE $asOf IS NULL OR i.ts <= datetime($asOf)
+}
+RETURN a.name AS application,
+       a.applicationId AS id,
+       a.owner AS owner,
+       a.tier AS tier
+ORDER BY a.tier ASC, a.name ASC
+"""
+
+QUERY_GET_OPEN_INCIDENTS = """
+MATCH (i:Incident)-[:AFFECTS]->(a:Application)
+WHERE i.status = $status
+RETURN i.incidentId AS incidentId,
+       i.title AS title,
+       i.severity AS severity,
+       i.status AS status,
+       a.name AS applicationName,
+       i.mttr_minutes AS mttr_minutes
+ORDER BY i.severity ASC, i.ts ASC
 """
 
 
@@ -250,3 +311,120 @@ def get_application_full_chain(
         QUERY_GET_APPLICATION_FULL_CHAIN, {"applicationId": application_id}
     )
     return [FullDownstreamChain.from_record(r) for r in records]
+
+
+def get_dependency_paths(
+    client: "Neo4jClient", application_id: str, database_id: str
+) -> list[DependencyPath]:
+    """Return bounded dependency paths from an application to a database (Q5).
+
+    Parameters
+    ----------
+    client:
+        Connected Neo4j client.
+    application_id:
+        Unique ``Application.applicationId``.
+    database_id:
+        Unique ``Database.databaseId``.
+
+    Returns
+    -------
+    list[DependencyPath]
+        Paths ordered by hop count ascending (shortest first).
+    """
+    records = client.execute_read(
+        QUERY_GET_DEPENDENCY_PATHS,
+        {"applicationId": application_id, "databaseId": database_id},
+    )
+    return [DependencyPath.from_record(r) for r in records]
+
+
+def get_top_applications_by_users(
+    client: "Neo4jClient", limit: int = 3
+) -> list[ApplicationStats]:
+    """Return the top N applications by unique employee count (Q6).
+
+    Parameters
+    ----------
+    client:
+        Connected Neo4j client.
+    limit:
+        Maximum number of applications to return (default ``3``).
+
+    Returns
+    -------
+    list[ApplicationStats]
+        Ordered by ``uniqueUsers`` descending, then ``applicationId`` ascending.
+        ``incidentCount`` is ``0`` (not computed by this query).
+    """
+    records = client.execute_read(
+        QUERY_GET_TOP_APPLICATIONS_BY_USERS, {"limit": limit}
+    )
+    return [ApplicationStats.from_record(r) for r in records]
+
+
+def get_shared_database_employees(
+    client: "Neo4jClient", min_apps: int = 2
+) -> list[SharedDatabaseEmployee]:
+    """Return employees with multiple apps sharing one database (Q7).
+
+    Parameters
+    ----------
+    client:
+        Connected Neo4j client.
+    min_apps:
+        Minimum distinct applications per (employee, database) pair.
+
+    Returns
+    -------
+    list[SharedDatabaseEmployee]
+        Ordered by ``app_count`` descending.
+    """
+    records = client.execute_read(
+        QUERY_GET_SHARED_DATABASE_EMPLOYEES, {"minApps": min_apps}
+    )
+    return [SharedDatabaseEmployee.from_record(r) for r in records]
+
+
+def get_applications_with_no_incidents(
+    client: "Neo4jClient", as_of: Optional[str] = None
+) -> list[ApplicationSummary]:
+    """Return applications with no incidents at or before ``as_of`` (Q8).
+
+    Parameters
+    ----------
+    client:
+        Connected Neo4j client.
+    as_of:
+        ISO datetime string cutoff, or ``None`` to treat any incident as present.
+
+    Returns
+    -------
+    list[ApplicationSummary]
+        Ordered by tier ascending, then application name.
+    """
+    records = client.execute_read(
+        QUERY_GET_APPLICATIONS_WITH_NO_INCIDENTS, {"asOf": as_of}
+    )
+    return [ApplicationSummary.from_record(r) for r in records]
+
+
+def get_open_incidents(
+    client: "Neo4jClient", status: str = "open"
+) -> list[IncidentSummary]:
+    """Return incidents matching ``status`` with their affected application.
+
+    Parameters
+    ----------
+    client:
+        Connected Neo4j client.
+    status:
+        Incident ``status`` property filter (default ``open``).
+
+    Returns
+    -------
+    list[IncidentSummary]
+        Ordered by severity, then incident timestamp.
+    """
+    records = client.execute_read(QUERY_GET_OPEN_INCIDENTS, {"status": status})
+    return [IncidentSummary.from_record(r) for r in records]

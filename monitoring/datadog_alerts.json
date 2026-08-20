@@ -3,7 +3,7 @@
     "name": "[P1] Neo4j Cluster Member Unreachable",
     "type": "metric alert",
     "query": "avg(last_3m):avg:neo4j.cluster.discovery.unreachable_members{*} > 0",
-    "message": "CRITICAL: Neo4j cluster has unreachable members. Quorum at risk. Check {{host.name}}. @pagerduty-neo4j-oncall",
+    "message": "CRITICAL: Neo4j cluster has unreachable members. Quorum at risk. Check {{host.name}}. See runbook: https://github.com/Syed-Abdul-Rehman-Nasir/neo4j-enterprise/blob/main/admin/troubleshooting_runbook.md @pagerduty-neo4j-oncall",
     "tags": [
       "service:neo4j",
       "severity:p1",
@@ -28,7 +28,7 @@
     "name": "[P2] Neo4j Query Latency p95 High",
     "type": "metric alert",
     "query": "avg(last_5m):p95:neo4j.db.query.execution.latency.milliseconds{*} > 5000",
-    "message": "WARNING: Query latency p95 exceeds 5s. Run CALL dbms.listQueries() to identify slow queries. Check for missing indexes.",
+    "message": "WARNING: Query latency p95 exceeds threshold (warn 2s / critical 5s). Run CALL dbms.listQueries() to identify slow queries. Check for missing indexes. See runbook: https://github.com/Syed-Abdul-Rehman-Nasir/neo4j-enterprise/blob/main/admin/troubleshooting_runbook.md",
     "tags": [
       "service:neo4j",
       "severity:p2",
@@ -37,7 +37,8 @@
     "priority": 2,
     "options": {
       "thresholds": {
-        "critical": 5000
+        "critical": 5000,
+        "warning": 2000
       },
       "notify_no_data": false,
       "require_full_window": true,
@@ -49,8 +50,8 @@
   {
     "name": "[P2] Neo4j Heap Utilization Critical",
     "type": "metric alert",
-    "query": "avg(last_10m):(avg:neo4j.jvm.memory.heap.used_bytes{*} / avg:neo4j.jvm.memory.heap.max_bytes{*}) * 100 > 85",
-    "message": "WARNING: JVM heap above 85%. GC pressure likely. Check for large in-memory traversals. Do not restart without capturing thread dump.",
+    "query": "avg(last_10m):(avg:neo4j.jvm.memory.heap.used_bytes{*} / avg:neo4j.jvm.memory.heap.max_bytes{*}) * 100 > 90",
+    "message": "WARNING: JVM heap above threshold (warn 80% / critical 90%). GC pressure likely. Check for large in-memory traversals. Do not restart without capturing thread dump. See runbook: https://github.com/Syed-Abdul-Rehman-Nasir/neo4j-enterprise/blob/main/admin/troubleshooting_runbook.md",
     "tags": [
       "service:neo4j",
       "severity:p2",
@@ -59,7 +60,8 @@
     "priority": 2,
     "options": {
       "thresholds": {
-        "critical": 85
+        "critical": 90,
+        "warning": 80
       },
       "notify_no_data": false,
       "require_full_window": true,
@@ -72,7 +74,7 @@
     "name": "[P2] Neo4j Page Cache Hit Ratio Degraded",
     "type": "metric alert",
     "query": "avg(last_10m):(sum:neo4j.db.page_cache.hits{*}.as_count() / (sum:neo4j.db.page_cache.hits{*}.as_count() + sum:neo4j.db.page_cache.misses{*}.as_count())) * 100 < 95",
-    "message": "WARNING: Page cache hit ratio below 95%. Working set may exceed cache size. Kill reporting queries and investigate recent data imports.",
+    "message": "WARNING: Page cache hit ratio below threshold (warn <97% / critical <95%). Working set may exceed cache size. Kill reporting queries and investigate recent data imports. See runbook: https://github.com/Syed-Abdul-Rehman-Nasir/neo4j-enterprise/blob/main/admin/troubleshooting_runbook.md",
     "tags": [
       "service:neo4j",
       "severity:p2",
@@ -81,7 +83,8 @@
     "priority": 2,
     "options": {
       "thresholds": {
-        "critical": 95
+        "critical": 95,
+        "warning": 97
       },
       "notify_no_data": false,
       "require_full_window": true,
@@ -93,8 +96,8 @@
   {
     "name": "[P3] Neo4j Disk Usage High",
     "type": "metric alert",
-    "query": "avg(last_5m):avg:system.disk.in_use{service:neo4j} * 100 > 75",
-    "message": "WARNING: Disk above 75% on Neo4j host. Check transaction log accumulation. Verify backups are running (logs prune only after checkpoint).",
+    "query": "avg(last_5m):avg:system.disk.in_use{service:neo4j} * 100 > 80",
+    "message": "WARNING: Disk above threshold (warn 70% / critical 80%) on Neo4j host. Check transaction log accumulation. Verify backups are running (logs prune only after checkpoint). See runbook: https://github.com/Syed-Abdul-Rehman-Nasir/neo4j-enterprise/blob/main/admin/troubleshooting_runbook.md",
     "tags": [
       "service:neo4j",
       "severity:p3",
@@ -103,13 +106,26 @@
     "priority": 3,
     "options": {
       "thresholds": {
-        "critical": 75
+        "critical": 80,
+        "warning": 70
       },
       "notify_no_data": false,
       "require_full_window": false,
       "include_tags": true,
       "evaluation_delay": 60,
       "new_host_delay": 300
+    }
+  },
+  {
+    "name": "Neo4j Replication Lag High",
+    "type": "metric alert",
+    "query": "avg(last_5m):avg:neo4j.cluster.raft.replication.lag{*} > 30000",
+    "message": "WARNING: Raft replication lag exceeds 30s on {{host.name}}. Secondary is falling behind primary. Check network between cluster members and disk I/O on secondary. See runbook: https://github.com/Syed-Abdul-Rehman-Nasir/neo4j-enterprise/blob/main/admin/troubleshooting_runbook.md @pagerduty-neo4j-oncall",
+    "tags": ["env:production", "service:neo4j", "team:platform"],
+    "options": {
+      "thresholds": { "critical": 30000, "warning": 5000 },
+      "notify_no_data": true,
+      "no_data_timeframe": 10
     }
   }
 ]

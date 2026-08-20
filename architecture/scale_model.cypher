@@ -239,7 +239,7 @@ WITH s, apps, impactedApplications, impactedDatabases, impactedTeams,
 UNWIND (CASE WHEN size(apps) = 0 THEN [null] ELSE apps END) AS app
 OPTIONAL MATCH (i:Incident)-[:AFFECTS]->(app)
 WHERE i.severity = 'P1'
-  AND i.status IN ['Open', 'Investigating']
+  AND i.status IN ['open', 'investigating']
 WITH s, impactedApplications, impactedDatabases, impactedTeams, estimatedCustomerCount,
      collect(DISTINCT CASE WHEN i IS NULL THEN null ELSE {
        incidentId: i.incidentId,

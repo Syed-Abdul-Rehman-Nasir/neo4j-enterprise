@@ -29,27 +29,29 @@
 
 MATCH (e:Employee {employeeId: $employeeId})
 MATCH (e)-[:USES]->(a:Application)-[dep:DEPENDS_ON]->(s:Service)-[:READS_FROM]->(db:Database)
-RETURN e.name AS employee_name,
-       a.name AS application_name,
-       s.name AS service_name,
-       s.type AS service_type,
-       db.name AS database_name,
-       db.engine AS database_engine,
-       dep.weight AS dependency_weight
-ORDER BY application_name, service_name;
+RETURN e.name AS employee,
+       a.name AS application,
+       a.applicationId AS applicationId,
+       s.name AS service,
+       s.type AS serviceType,
+       db.name AS database,
+       db.engine AS dbEngine,
+       dep.weight AS criticality
+ORDER BY application, service;
 
 // --- TEST (hardcoded; run immediately) --------------------------------------
 
 MATCH (e:Employee {employeeId: 'EMP-001'})
 MATCH (e)-[:USES]->(a:Application)-[dep:DEPENDS_ON]->(s:Service)-[:READS_FROM]->(db:Database)
-RETURN e.name AS employee_name,
-       a.name AS application_name,
-       s.name AS service_name,
-       s.type AS service_type,
-       db.name AS database_name,
-       db.engine AS database_engine,
-       dep.weight AS dependency_weight
-ORDER BY application_name, service_name;
+RETURN e.name AS employee,
+       a.name AS application,
+       a.applicationId AS applicationId,
+       s.name AS service,
+       s.type AS serviceType,
+       db.name AS database,
+       db.engine AS dbEngine,
+       dep.weight AS criticality
+ORDER BY application, service;
 
 // --- EXPLAIN ----------------------------------------------------------------
 // EXPLAIN

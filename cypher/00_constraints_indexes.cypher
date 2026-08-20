@@ -113,10 +113,20 @@ FOR (s:Service) ON (s.type);
 CREATE RANGE INDEX incident_severity_status IF NOT EXISTS
 FOR (i:Incident) ON (i.severity, i.status);
 
+// Q1 anchors on Department.name — without this index, Q1 performs a
+// NodeByLabelScan on Department before traversing to Employee and Application.
+CREATE RANGE INDEX idx_dept_name IF NOT EXISTS
+FOR (d:Department) ON (d.name);
+
 // -----------------------------------------------------------------------------
 // VERIFICATION (run manually; expected outcomes noted below)
 // -----------------------------------------------------------------------------
 // SHOW CONSTRAINTS YIELD name, type, labelsOrTypes, properties, state
-// SHOW INDEXES YIELD name, type, labelsOrTypes, properties, state WHERE state <> 'ONLINE'
+//   -- Expect 12 constraints (7 uniqueness + 5 existence), all ONLINE
+// SHOW INDEXES YIELD name, type, labelsOrTypes, properties, state
+//   -- Expect range indexes including idx_dept_name, incident_severity_status, …
+//   -- and uniqueness backing indexes; all state = ONLINE
 // EXPLAIN MATCH (e:Employee {employeeId: 'EMP-001'}) RETURN e
 // -- Expected: NodeIndexSeek, NOT NodeByLabelScan
+// EXPLAIN MATCH (d:Department {name: 'Finance'}) RETURN d
+// -- Expected: NodeIndexSeek via idx_dept_name

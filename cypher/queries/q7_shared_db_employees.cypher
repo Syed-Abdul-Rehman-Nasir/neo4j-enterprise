@@ -33,7 +33,7 @@
 MATCH (e:Employee)-[:USES]->(a:Application)-[:DEPENDS_ON*1..3]->(s:Service)-[:READS_FROM]->(db:Database)
 WITH e, db, collect(DISTINCT a) AS apps
 WHERE size(apps) >= $minApps
-RETURN e.name AS employee_name,
+RETURN e.name AS employee,
        db.name AS shared_database,
        [x IN apps | x.name] AS applications,
        size(apps) AS app_count
@@ -44,7 +44,7 @@ ORDER BY app_count DESC;
 MATCH (e:Employee)-[:USES]->(a:Application)-[:DEPENDS_ON*1..3]->(s:Service)-[:READS_FROM]->(db:Database)
 WITH e, db, collect(DISTINCT a) AS apps
 WHERE size(apps) >= 2
-RETURN e.name AS employee_name,
+RETURN e.name AS employee,
        db.name AS shared_database,
        [x IN apps | x.name] AS applications,
        size(apps) AS app_count

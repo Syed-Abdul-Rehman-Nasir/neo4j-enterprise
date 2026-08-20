@@ -6,19 +6,22 @@ This repository is a **Neo4j DBA technical assessment** built around an enterpri
 
 ## Assessment Scoring Map
 
-| Scoring Area | Points | Files | Status |
-|---|---:|---|---|
-| Schema & Cypher | 20 | `cypher/00_constraints_indexes.cypher`, `cypher/01_sample_data.cypher`, `cypher/queries/q1_finance_apps.cypher` … `q9_full_downstream_chain.cypher`, `cypher/migrations/` | Complete |
-| Performance | 15 | `cypher/performance/explain_profile_analysis.cypher`, `cypher/performance/query_tuning_notes.md` | Complete |
-| Python drivers / tooling | 15 | `python/neo4j_client.py`, `python/queries.py`, `python/models.py`, `python/exceptions.py`, `python/requirements.txt`, `python/__init__.py` | Complete |
-| Testing | 10 | `tests/conftest.py`, `tests/test_constraints.py`, `tests/test_queries.py`, `tests/test_python_client.py`, `tests/test_performance.py`, `pytest.ini` | Complete |
-| Admin / ops | 15 | `admin/backup.sh`, `admin/restore.sh`, `admin/cluster_health_check.sh`, `admin/rbac_setup.cypher`, `admin/troubleshooting_runbook.md` | Complete |
-| Monitoring | 10 | `monitoring/prometheus.yml`, `monitoring/metrics_catalog.md`, `monitoring/datadog_dashboard.json`, `monitoring/datadog_alerts.json` | Complete |
-| CI/CD | 5 | `ci/.github/workflows/neo4j-validate.yml`, `ci/.github/workflows/neo4j-deploy.yml` | Complete |
-| Architecture docs | 10 | `architecture/SCALE_DESIGN.md`, `architecture/scale_model.cypher`, `docs/` | Complete |
-| **Total** | **100** | | |
+This project is structured to address every criterion in the official scoring guide.
+
+| Scoring Area | Points | Primary Files | Notes |
+|---|---|---|---|
+| Neo4j Modeling | 15 | `cypher/00_constraints_indexes.cypher`, `cypher/01_sample_data.cypher`, `docs/GRAPH_MODEL.md` | 7 node labels, 7 relationship types, edge properties, idempotent MERGE seed |
+| Cypher Queries | 25 | `cypher/queries/q1`–`q9`, `cypher/performance/` | All 9 required queries, parameterized, with EXPLAIN analysis |
+| Performance | 15 | `cypher/performance/explain_profile_analysis.cypher`, `cypher/performance/query_tuning_notes.md`, `docs/PERFORMANCE_ANALYSIS.md` | EXPLAIN/PROFILE walkthroughs, 4 optimization techniques, memory config reference |
+| DBA / HA | 20 | `admin/backup.sh`, `admin/restore.sh`, `admin/rbac_setup.cypher`, `admin/cluster_health_check.sh`, `admin/troubleshooting_runbook.md`, `docs/HA_CLUSTERING.md` | Backup/restore with RPO/RTO, RBAC least privilege, 7-check health script, incident runbook, cluster topology |
+| Python | 5 | `python/neo4j_client.py`, `python/queries.py`, `python/models.py`, `python/exceptions.py` | All 9 queries wrapped, typed dataclasses, managed transactions, custom exception hierarchy |
+| Monitoring / Datadog | 5 | `monitoring/datadog_dashboard.json`, `monitoring/datadog_alerts.json`, `monitoring/prometheus.yml`, `monitoring/metrics_catalog.md` | 10-widget dashboard, 6 production alerts, 15-metric catalog with thresholds |
+| CI/CD | 5 | `.github/workflows/neo4j-validate.yml`, `.github/workflows/neo4j-deploy.yml`, `cypher/migrations/` | PR validation, gated production deploy, backup-before-migrate, rollback on failure |
+| Architecture | 10 | `architecture/SCALE_DESIGN.md`, `architecture/scale_model.cypher` | 5M node / 100M edge design, blast radius query, ingestion strategy, capacity planning |
 
 Supporting runtime (not scored separately): `docker-compose.yml`, `.env.example`, `.gitignore`.
+
+The `ci/` directory has been removed. Authoritative workflows live in `.github/workflows/` as required by GitHub Actions.
 
 ---
 
@@ -244,9 +247,9 @@ neo4j-enterprise-assessment/
 │   ├── SCALE_DESIGN.md                   # Scale architecture (5M/100M, HA, capacity)
 │   └── scale_model.cypher                # Scale schema, blast radius, pre-compute, SPOF
 │
-├── ci/.github/workflows/
+├── .github/workflows/
 │   ├── neo4j-validate.yml                # CI validation workflow
-│   └── neo4j-deploy.yml                  # Deploy workflow stub
+│   └── neo4j-deploy.yml                  # Production deploy + rollback
 │
 ├── cypher/
 │   ├── 00_constraints_indexes.cypher     # Lab uniqueness, existence, range indexes

@@ -217,3 +217,98 @@ class FullDownstreamChain:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+@dataclass(frozen=True)
+class DependencyPath:
+    path_nodes: list[str]
+    hops: int
+
+    @classmethod
+    def from_record(cls, record: Mapping[str, Any]) -> "DependencyPath":
+        try:
+            nodes = _require(record, "path_nodes", "node_names", field="path_nodes")
+            return cls(
+                path_nodes=[str(n) for n in list(nodes)],
+                hops=int(_require(record, "hops", "hop_count", field="hops")),
+            )
+        except DataError:
+            raise
+        except Exception as exc:
+            raise DataError(
+                "Failed to parse DependencyPath from record", details={"cause": str(exc)}
+            ) from exc
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"path_nodes": self.path_nodes, "hops": self.hops}
+
+
+@dataclass(frozen=True)
+class SharedDatabaseEmployee:
+    employee: str
+    shared_database: str
+    applications: list[str]
+    app_count: int
+
+    @classmethod
+    def from_record(cls, record: Mapping[str, Any]) -> "SharedDatabaseEmployee":
+        try:
+            apps = _require(record, "applications", field="applications")
+            return cls(
+                employee=str(
+                    _require(record, "employee", "employee_name", field="employee")
+                ),
+                shared_database=str(
+                    _require(record, "shared_database", field="shared_database")
+                ),
+                applications=[str(a) for a in list(apps)],
+                app_count=int(_require(record, "app_count", field="app_count")),
+            )
+        except DataError:
+            raise
+        except Exception as exc:
+            raise DataError(
+                "Failed to parse SharedDatabaseEmployee from record",
+                details={"cause": str(exc)},
+            ) from exc
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "employee": self.employee,
+            "shared_database": self.shared_database,
+            "applications": self.applications,
+            "app_count": self.app_count,
+        }
+
+
+@dataclass(frozen=True)
+class ApplicationSummary:
+    application: str
+    id: str
+    owner: str
+    tier: int
+
+    @classmethod
+    def from_record(cls, record: Mapping[str, Any]) -> "ApplicationSummary":
+        try:
+            return cls(
+                application=str(_require(record, "application", field="application")),
+                id=str(_require(record, "id", "applicationId", field="id")),
+                owner=str(_require(record, "owner", field="owner")),
+                tier=int(_require(record, "tier", field="tier")),
+            )
+        except DataError:
+            raise
+        except Exception as exc:
+            raise DataError(
+                "Failed to parse ApplicationSummary from record",
+                details={"cause": str(exc)},
+            ) from exc
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "application": self.application,
+            "id": self.id,
+            "owner": self.owner,
+            "tier": self.tier,
+        }

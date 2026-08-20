@@ -29,6 +29,7 @@ services:
       - ./neo4j/logs:/logs
       - ./neo4j/import:/var/lib/neo4j/import
       - ./neo4j/plugins:/plugins
+      - ./neo4j/backups:/backups
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:7474"]
       interval: 10s

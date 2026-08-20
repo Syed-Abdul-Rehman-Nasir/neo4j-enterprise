@@ -16,7 +16,17 @@ scrape_configs:
     relabel_configs:
       - source_labels: [__address__]
         target_label: instance
+    # Keep only metric families used by dashboards, alerts, and the metrics catalog:
+    #   db_page_cache  — hit ratio widget / page-cache alerts
+    #   jvm            — heap utilization / GC widgets
+    #   db_query       — latency p50/p95/p99 timeseries
+    #   db_transaction — active tx + throughput widgets
+    #   cluster        — unreachable members + replication lag alerts
+    #   bolt           — connection open/close dashboard widgets
+    #   ids_in_use     — node/relationship cardinality catalog metrics
+    #   db_store       — store size growth widget
+    #   db_checkpoint  — checkpoint duration catalog metric
     metric_relabel_configs:
       - source_labels: [__name__]
-        regex: 'neo4j_(db_page_cache|jvm|db_query|db_transaction|cluster).*'
+        regex: 'neo4j_(db_page_cache|jvm|db_query|db_transaction|cluster|bolt|ids_in_use|db_store|db_checkpoint).*'
         action: keep

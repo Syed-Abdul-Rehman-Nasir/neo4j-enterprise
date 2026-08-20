@@ -1,81 +1,76 @@
 // =============================================================================
 // q8_no_incidents.cypher
 // =============================================================================
-// WHAT: Find applications that have never had any incident (no inbound AFFECTS).
+// WHAT: Find applications with no inbound AFFECTS from incidents at or before
+//       $asOf (historical "clean" apps as of a point in time).
 //
-// WHY WHERE NOT (pattern) INSTEAD OF OPTIONAL MATCH + IS NULL:
-//   WHERE NOT (a)<-[:AFFECTS]-(:Incident) states anti-join intent directly:
-//   "keep applications for which this pattern does not exist." It is more
-//   readable and typically more efficient in Neo4j than OPTIONAL MATCH, which
-//   builds a row for every application (padding with null when no incident),
-//   then filters WHERE i IS NULL. The NOT-pattern form can stop at the first
-//   matching incident (existence check) without materializing null joins.
+// PARAMETERS:
+//   $asOf — optional datetime (or null). When null, any incident counts as
+//           "has incident". When set, only incidents with i.ts <= $asOf count.
+//
+// VARIANTS:
+//   1) NOT EXISTS subquery (preferred) — production block below
+//   2) OPTIONAL MATCH + count = 0 — alternative below
 //
 // INDEXES USED:
 //   - Application.applicationId uniqueness
 //   - Application.tier range index (ORDER BY tier)
+//   - Incident.ts range index (cutoff filter)
 //
 // EXPECTED RESULT SHAPE:
-//   | application_name | applicationId | owner | tier |
-//   Ordered by tier ASC, name ASC.
-//   Sample: HRConnect (APP-003, tier 2), AlertManager (APP-005, tier 3).
+//   | application | id | owner | tier |
+//   Sample ($asOf far future / null on sample): HRConnect (APP-003), AlertManager (APP-005).
 // =============================================================================
 
-// --- PRODUCTION (preferred: WHERE NOT pattern) ------------------------------
+// --- PRODUCTION (parameters) -------------------------------------------------
+// :param asOf => null   OR   :param asOf => datetime('2099-12-31T23:59:59')
 
 MATCH (a:Application)
-WHERE NOT (a)<-[:AFFECTS]-(:Incident)
-RETURN a.name AS application_name,
-       a.applicationId AS applicationId,
+WHERE NOT EXISTS {
+  MATCH (i:Incident)-[:AFFECTS]->(a)
+  WHERE $asOf IS NULL OR i.ts <= datetime($asOf)
+}
+RETURN a.name AS application,
+       a.applicationId AS id,
        a.owner AS owner,
        a.tier AS tier
 ORDER BY a.tier ASC, a.name ASC;
 
-// --- TEST (hardcoded; same query, no parameters) ----------------------------
+// --- TEST (hardcoded far-future cutoff; run immediately) --------------------
 
 MATCH (a:Application)
-WHERE NOT (a)<-[:AFFECTS]-(:Incident)
-RETURN a.name AS application_name,
-       a.applicationId AS applicationId,
+WHERE NOT EXISTS {
+  MATCH (i:Incident)-[:AFFECTS]->(a)
+  WHERE i.ts <= datetime('2099-12-31T23:59:59')
+}
+RETURN a.name AS application,
+       a.applicationId AS id,
        a.owner AS owner,
        a.tier AS tier
 ORDER BY a.tier ASC, a.name ASC;
 
-// --- VARIANT: OPTIONAL MATCH + WHERE i IS NULL — PRODUCTION -----------------
+// --- VARIANT: OPTIONAL MATCH + count = 0 — PRODUCTION ----------------------
 
 MATCH (a:Application)
-OPTIONAL MATCH (a)<-[:AFFECTS]-(i:Incident)
-WITH a, i
-WHERE i IS NULL
-RETURN a.name AS application_name,
-       a.applicationId AS applicationId,
+OPTIONAL MATCH (i:Incident)-[:AFFECTS]->(a)
+WHERE $asOf IS NULL OR i.ts <= datetime($asOf)
+WITH a, count(i) AS incidentHits
+WHERE incidentHits = 0
+RETURN a.name AS application,
+       a.applicationId AS id,
        a.owner AS owner,
        a.tier AS tier
 ORDER BY a.tier ASC, a.name ASC;
 
-// --- VARIANT: OPTIONAL MATCH + WHERE i IS NULL — TEST -----------------------
+// --- VARIANT: OPTIONAL MATCH + count = 0 — TEST -----------------------------
 
 MATCH (a:Application)
-OPTIONAL MATCH (a)<-[:AFFECTS]-(i:Incident)
-WITH a, i
-WHERE i IS NULL
-RETURN a.name AS application_name,
-       a.applicationId AS applicationId,
+OPTIONAL MATCH (i:Incident)-[:AFFECTS]->(a)
+WHERE i.ts <= datetime('2099-12-31T23:59:59')
+WITH a, count(i) AS incidentHits
+WHERE incidentHits = 0
+RETURN a.name AS application,
+       a.applicationId AS id,
        a.owner AS owner,
        a.tier AS tier
 ORDER BY a.tier ASC, a.name ASC;
-
-// --- EXPLAIN ----------------------------------------------------------------
-// EXPLAIN
-// MATCH (a:Application)
-// WHERE NOT (a)<-[:AFFECTS]-(:Incident)
-// RETURN a.name, a.applicationId, a.owner, a.tier
-// ORDER BY a.tier ASC, a.name ASC;
-//
-// Expected plan shape (NOT pattern):
-//   - NodeByLabelScan(:Application)
-//   - AntiSemiApply / LetAntiSemiApply (or similar anti-join) testing AFFECTS
-//   - Sort by tier, name
-//
-// OPTIONAL MATCH variant typically shows OptionalExpand + Filter(i IS NULL),
-// which materializes more intermediate rows.

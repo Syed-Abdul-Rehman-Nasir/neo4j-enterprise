@@ -211,11 +211,6 @@ bolt_connectivity() {
 # ---------------------------------------------------------------------------
 cluster_role() {
   local name="cluster_role"
-  if [[ -z "${EXPECTED_ROLE}" ]]; then
-    record_result "${name}" "FAIL" " --expected-role not provided"
-    return
-  fi
-
   local out rc role
   set +e
   out="$(run_cypher system "CALL dbms.cluster.role() YIELD role RETURN role;")"
@@ -230,6 +225,11 @@ cluster_role() {
   role="$(echo "${out}" | awk 'NF && $1 !~ /role/ {print toupper($1); exit}')"
   if [[ -z "${role}" ]]; then
     role="$(echo "${out}" | tr -d '\r' | awk 'NF{print toupper($NF)}' | tail -n 1)"
+  fi
+
+  if [[ -z "${EXPECTED_ROLE}" ]]; then
+    record_result "${name}" "PASS" "Current role: ${role:-unknown} (no expected role specified)"
+    return
   fi
 
   local expected

@@ -37,20 +37,18 @@
 MATCH (a:Application {applicationId: $applicationId})
 MATCH (db:Database {databaseId: $databaseId})
 MATCH path = (a)-[:DEPENDS_ON*1..3]->(s:Service)-[:READS_FROM]->(db)
-RETURN path,
-       [n IN nodes(path) | coalesce(n.name, n.applicationId, n.serviceId, n.databaseId)] AS node_names,
-       length(path) AS hop_count
-ORDER BY hop_count ASC;
+RETURN [n IN nodes(path) | coalesce(n.name, n.applicationId, n.serviceId, n.databaseId)] AS path_nodes,
+       length(path) AS hops
+ORDER BY hops ASC;
 
 // --- TEST (hardcoded; run immediately) --------------------------------------
 
 MATCH (a:Application {applicationId: 'APP-001'})
 MATCH (db:Database {databaseId: 'DB-001'})
 MATCH path = (a)-[:DEPENDS_ON*1..3]->(s:Service)-[:READS_FROM]->(db)
-RETURN path,
-       [n IN nodes(path) | coalesce(n.name, n.applicationId, n.serviceId, n.databaseId)] AS node_names,
-       length(path) AS hop_count
-ORDER BY hop_count ASC;
+RETURN [n IN nodes(path) | coalesce(n.name, n.applicationId, n.serviceId, n.databaseId)] AS path_nodes,
+       length(path) AS hops
+ORDER BY hops ASC;
 
 // --- VARIANT: shortestPath only — PRODUCTION --------------------------------
 // Use when only the single shortest path is needed (cheaper than enumerating

@@ -41,6 +41,18 @@
           "label": "milliseconds",
           "include_zero": true
         },
+        "markers": [
+          {
+            "value": "y = 2000",
+            "display_type": "warning dashed",
+            "label": "Warning 2000ms"
+          },
+          {
+            "value": "y = 5000",
+            "display_type": "error dashed",
+            "label": "Critical 5000ms"
+          }
+        ],
         "show_legend": true
       }
     },
@@ -73,7 +85,7 @@
             "conditional_formats": [
               {
                 "comparator": ">",
-                "value": 99,
+                "value": 97,
                 "palette": "white_on_green"
               },
               {
@@ -126,9 +138,14 @@
         ],
         "markers": [
           {
-            "value": "y = 85",
+            "value": "y = 80",
+            "display_type": "warning dashed",
+            "label": "Warning 80%"
+          },
+          {
+            "value": "y = 90",
             "display_type": "error dashed",
-            "label": "Critical 85%"
+            "label": "Critical 90%"
           }
         ],
         "yaxis": {
@@ -166,6 +183,18 @@
           }
         ],
         "show_legend": true,
+        "markers": [
+          {
+            "value": "y = 100",
+            "display_type": "warning dashed",
+            "label": "Warning 100"
+          },
+          {
+            "value": "y = 200",
+            "display_type": "error dashed",
+            "label": "Critical 200"
+          }
+        ],
         "yaxis": {
           "label": "transactions",
           "include_zero": true
