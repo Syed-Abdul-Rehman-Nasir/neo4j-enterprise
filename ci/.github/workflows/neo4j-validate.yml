@@ -104,15 +104,15 @@ jobs:
           cypher-shell -a bolt://localhost:7687 -u neo4j -p testpassword1234 \
             --file cypher/00_constraints_indexes.cypher
 
-      - name: Verify constraints ONLINE
+      - name: Verify constraints created
         run: |
           set -euo pipefail
-          OFFLINE=$(cypher-shell -a bolt://localhost:7687 -u neo4j -p testpassword1234 --format plain \
-            "SHOW CONSTRAINTS YIELD state WHERE state <> 'ONLINE' RETURN count(*) AS offline;" \
+          CONSTRAINT_COUNT=$(cypher-shell -a bolt://localhost:7687 -u neo4j -p testpassword1234 --format plain \
+            "SHOW CONSTRAINTS YIELD name RETURN count(name) AS constraint_count;" \
             | tail -n 1 | tr -dc '0-9')
-          echo "Non-ONLINE constraints: ${OFFLINE}"
-          if [[ "${OFFLINE}" != "0" ]]; then
-            echo "Expected 0 non-ONLINE constraints, got ${OFFLINE:-unparseable}" >&2
+          echo "Constraints created: ${CONSTRAINT_COUNT}"
+          if [[ "${CONSTRAINT_COUNT}" != "12" ]]; then
+            echo "Expected 12 constraints, got ${CONSTRAINT_COUNT:-unparseable}" >&2
             exit 1
           fi
 
