@@ -1,0 +1,10 @@
+.sidebar { position: sticky; top: 0; height: 100vh; border-right: 1px solid var(--border-subtle); padding: var(--space-5); background: rgba(26, 24, 20, 0.84); backdrop-filter: blur(18px); }
+.brand { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-8); }
+.logo { display: grid; place-items: center; width: 2.6rem; height: 2.6rem; border-radius: var(--radius-md); color: var(--text-inverse); background: var(--color-chartreuse-400); font-family: var(--font-display); font-weight: 800; }
+.title { margin: 0; font-family: var(--font-display); font-size: 1rem; line-height: 1.1; }
+.sub { margin: 0; color: var(--text-muted); font-size: 0.8rem; }
+.nav { display: grid; gap: var(--space-2); }
+.link { display: flex; align-items: center; gap: var(--space-3); border: 1px solid transparent; border-radius: var(--radius-sm); padding: var(--space-3); color: var(--text-secondary); font-weight: 700; }
+.link:hover { background: var(--surface-panel); }
+.active { color: var(--text-primary); background: var(--surface-panel-strong); border-color: var(--border-subtle); box-shadow: inset 3px 0 0 var(--color-chartreuse-400); }
+@media (max-width: 860px) { .sidebar { position: static; height: auto; } .nav { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

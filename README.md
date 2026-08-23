@@ -1,33 +1,41 @@
 # Enterprise IT Dependency Graph
 
-This repository is a **Neo4j DBA technical assessment** built around an enterprise IT dependency graph: employees and teams use applications that depend on services, which read databases hosted on servers, with incidents overlaying the application layer for operational impact analysis. The stack is **Neo4j 5.23 Enterprise** (APOC + GDS), **Docker Compose** for local runtime, **Python 3.12+** with the official Neo4j driver and Testcontainers, plus Prometheus/Datadog monitoring stubs and GitHub Actions CI. It solves the practical DBA problem of modeling, querying, tuning, and operating a dependency graph so responders can answer “what breaks if X fails?”—and is intended for Neo4j DBA candidates, reviewers, and engineers evaluating production graph operations skill.
+Neo4j-backed operations platform for enterprise IT dependency and blast-radius analysis. Employees and teams use applications that depend on services, which read databases hosted on servers, with incidents overlaying the application layer. The stack is **Neo4j 5.23 Enterprise** (APOC + GDS), **Docker Compose**, a **FastAPI** BFF over the official Neo4j Python driver, a **React** operations console, Prometheus/Datadog monitoring artifacts, and GitHub Actions CI.
+
+**Primary question this system answers:** “What breaks if X fails?”
 
 ---
 
-## Assessment Scoring Map
+## Operations Console
 
-This project is structured to address every criterion in the official scoring guide.
+React console over a read-only FastAPI BFF. Six views:
 
-| Scoring Area | Points | Primary Files | Notes |
-|---|---|---|---|
-| Neo4j Modeling | 15 | `cypher/00_constraints_indexes.cypher`, `cypher/01_sample_data.cypher`, `docs/GRAPH_MODEL.md` | 7 node labels, 7 relationship types, edge properties, idempotent MERGE seed |
-| Cypher Queries | 25 | `cypher/queries/q1`–`q9`, `cypher/performance/` | All 9 required queries, parameterized, with EXPLAIN analysis |
-| Performance | 15 | `cypher/performance/explain_profile_analysis.cypher`, `cypher/performance/query_tuning_notes.md`, `docs/PERFORMANCE_ANALYSIS.md` | EXPLAIN/PROFILE walkthroughs, 4 optimization techniques, memory config reference |
-| DBA / HA | 20 | `admin/backup.sh`, `admin/restore.sh`, `admin/rbac_setup.cypher`, `admin/cluster_health_check.sh`, `admin/troubleshooting_runbook.md`, `docs/HA_CLUSTERING.md` | Backup/restore with RPO/RTO, RBAC least privilege, 7-check health script, incident runbook, cluster topology |
-| Python | 5 | `python/neo4j_client.py`, `python/queries.py`, `python/models.py`, `python/exceptions.py` | All 9 queries wrapped, typed dataclasses, managed transactions, custom exception hierarchy |
-| Monitoring / Datadog | 5 | `monitoring/datadog_dashboard.json`, `monitoring/datadog_alerts.json`, `monitoring/prometheus.yml`, `monitoring/metrics_catalog.md` | 10-widget dashboard, 6 production alerts, 15-metric catalog with thresholds |
-| CI/CD | 5 | `.github/workflows/neo4j-validate.yml`, `.github/workflows/neo4j-deploy.yml`, `cypher/migrations/` | PR validation, gated production deploy, backup-before-migrate, rollback on failure |
-| Architecture | 10 | `architecture/SCALE_DESIGN.md`, `architecture/scale_model.cypher` | 5M node / 100M edge design, blast radius query, ingestion strategy, capacity planning |
+| Route | Purpose |
+|---|---|
+| `/` | Live graph counts vs production scale target; DB-001 scenario |
+| `/graph` | Cytoscape topology explorer |
+| `/impact` | Database blast radius + dependency paths |
+| `/applications` | Incidents, clean apps, downstream chain |
+| `/operations` | Prometheus metrics, alerts, runbook |
+| `/queries/:queryId` | Allowlisted Q1–Q9 Cypher workbench (default `/queries/q4`) |
 
-Supporting runtime (not scored separately): `docker-compose.yml`, `.env.example`, `.gitignore`.
+### Walkthrough
 
-The `ci/` directory has been removed. Authoritative workflows live in `.github/workflows/` as required by GitHub Actions.
+1. **Overview** — review live counts and the separate production scale strip; open the DB-001 scenario.
+2. **Graph** — explore layered topology; inspect FinanceSuite and `DEPENDS_ON` relationships.
+3. **Impact** — DB-001 blast radius, impacted employees, and bounded app→database paths; Simulate failure is visual only.
+4. **Applications** — FinanceSuite incident history and weighted downstream chain; clean applications (e.g. HRConnect / AlertManager).
+5. **Workbench** — run Q4 with `DB-001`; inspect expected plan operators; try Q5 paths and Q7 shared-database exposure.
+
+Bolt credentials are never exposed to the browser. Query Workbench rejects unknown query IDs and unexpected parameters.
+
+Local console notes: [`docs/CONSOLE.md`](docs/CONSOLE.md).
 
 ---
 
 ## Architecture Overview
 
-### Lab dependency graph
+### Dependency graph
 
 ```
   Employees ──USES──► Applications ──DEPENDS_ON──► Services ──READS_FROM──► Databases ──HOSTED_ON──► Servers
@@ -58,7 +66,9 @@ The `ci/` directory has been removed. Authoritative workflows live in `.github/w
               └──► Backup Read Replica C      (neo4j-admin backup only)
 ```
 
-Details: [`architecture/SCALE_DESIGN.md`](architecture/SCALE_DESIGN.md), [`architecture/scale_model.cypher`](architecture/scale_model.cypher).
+Details: [`architecture/SCALE_DESIGN.md`](architecture/SCALE_DESIGN.md), [`architecture/scale_model.cypher`](architecture/scale_model.cypher), [`docs/HA_CLUSTERING.md`](docs/HA_CLUSTERING.md).
+
+Local Compose runs a **single-node** Neo4j instance for development. The multi-node topology above is the production scale design.
 
 ---
 
@@ -80,7 +90,19 @@ Details: [`architecture/SCALE_DESIGN.md`](architecture/SCALE_DESIGN.md), [`archi
    docker-compose up -d
    ```
 
-   Starts Neo4j Enterprise (`:7474` Browser, `:7687` Bolt, `:2004` Prometheus metrics) and Prometheus (`:9090`).
+   Starts Neo4j Enterprise (`:7474` Browser, `:7687` Bolt, `:2004` Prometheus metrics), Prometheus (`:9090`), the FastAPI BFF (`:8000`), and the Operations Console frontend (`:8080`).
+
+   For day-to-day development you can also run only data services and start API/UI locally:
+
+   ```powershell
+   docker-compose up -d neo4j prometheus
+   # after schema + sample data (steps 4–5):
+   python -m uvicorn python.api.main:app --reload --port 8000
+   npm --prefix frontend install
+   npm --prefix frontend run dev
+   ```
+
+   Open `http://localhost:5173` (Vite) or `http://localhost:8080` (Compose frontend). API docs: `http://localhost:8000/docs`.
 
 3. **Wait for Neo4j to be healthy**
 
@@ -88,15 +110,7 @@ Details: [`architecture/SCALE_DESIGN.md`](architecture/SCALE_DESIGN.md), [`archi
    docker-compose ps
    ```
 
-   Look for `healthy` on the Neo4j service, for example:
-
-   ```text
-   NAME      IMAGE                     STATUS
-   neo4j     neo4j:5.23-enterprise     Up … (healthy)
-   prometheus prom/prometheus:latest   Up …
-   ```
-
-   If status is `health: starting`, wait and re-check (healthcheck allows ~40s start period).
+   Look for `healthy` on the Neo4j service. If status is `health: starting`, wait and re-check (healthcheck allows ~40s start period). Do not seed until Neo4j is healthy.
 
 4. **Apply schema** (constraints and indexes)
 
@@ -119,6 +133,13 @@ Details: [`architecture/SCALE_DESIGN.md`](architecture/SCALE_DESIGN.md), [`archi
      < cypher/01_sample_data.cypher
    ```
 
+   PowerShell:
+
+   ```powershell
+   Get-Content cypher\01_sample_data.cypher -Raw |
+     docker-compose exec -T neo4j cypher-shell -u neo4j -p changeme_use_vault_in_prod
+   ```
+
 6. **Verify node counts**
 
    ```bash
@@ -126,9 +147,9 @@ Details: [`architecture/SCALE_DESIGN.md`](architecture/SCALE_DESIGN.md), [`archi
      "MATCH (n) RETURN labels(n)[0] AS label, count(n) AS cnt ORDER BY label"
    ```
 
-   Expect labels such as `Department`, `Employee`, `Application`, `Service`, `Database`, `Server`, `Incident` with non-zero counts.
+   Expect labels such as `Department`, `Employee`, `Application`, `Service`, `Database`, `Server`, `Incident` with non-zero counts (sample graph: **38 nodes**, **45 relationships**).
 
-7. **Run test queries** (Browser at http://localhost:7474 or `cypher-shell`)
+7. **Try queries** (Browser at http://localhost:7474, `cypher-shell`, or the Workbench UI)
 
    **Q1 — Finance applications**
 
@@ -136,15 +157,15 @@ Details: [`architecture/SCALE_DESIGN.md`](architecture/SCALE_DESIGN.md), [`archi
    :param departmentName => 'Finance'
    ```
 
-   Then run the production block in `cypher/queries/q1_finance_apps.cypher` (or paste the hardcoded test variant in that file). Expect FinanceSuite with multiple Finance users.
+   Then run the production block in `cypher/queries/q1_finance_apps.cypher`.
 
    **Q4 — Database blast radius**
 
-   Open `cypher/queries/q4_db_impact_analysis.cypher`, set `$databaseId` to `'DB-001'`, run the production query. Expect employees/apps/services in the impact list for `fin-postgres-prod`.
+   Open `cypher/queries/q4_db_impact_analysis.cypher`, set `$databaseId` to `'DB-001'`.
 
    **Q5 — Bounded dependency paths**
 
-   Open `cypher/queries/q5_dependency_paths.cypher` with `$applicationId => 'APP-001'` and `$databaseId => 'DB-001'`. Expect short DEPENDS_ON paths into the target database (no unbounded `*`).
+   Open `cypher/queries/q5_dependency_paths.cypher` with `$applicationId => 'APP-001'` and `$databaseId => 'DB-001'`.
 
 ---
 
@@ -158,7 +179,7 @@ Details: [`architecture/SCALE_DESIGN.md`](architecture/SCALE_DESIGN.md), [`archi
 
   ```bash
   python -m venv .venv
-  source .venv/bin/activate   # Windows: .venv\Scripts\activate
+  source .venv/bin/activate   # Windows: .venv\Scripts\Activate.ps1
   pip install -r python/requirements.txt
   ```
 
@@ -166,6 +187,8 @@ Details: [`architecture/SCALE_DESIGN.md`](architecture/SCALE_DESIGN.md), [`archi
 
 ```bash
 pytest tests/ -v
+pytest python/api/tests -q
+npm --prefix frontend run test
 ```
 
 ### Individual files
@@ -176,13 +199,13 @@ pytest tests/ -v
 | `pytest tests/test_queries.py -v` | q1–q9 result shapes and sample expectations |
 | `pytest tests/test_python_client.py -v` | Driver client, connectivity, typed query helpers |
 | `pytest tests/test_performance.py -v` | EXPLAIN plans use `NodeIndexSeek` (not label scans) on hot lookups |
+| `pytest python/api/tests -q` | Query catalog allowlist and parameter validation |
 
 ### How to read the output
 
 - **PASSED** — assertion held against the Testcontainers seed graph.
 - **FAILED** — diff shows expected vs actual; check seed data or query Cypher first.
 - **ERROR** — often Docker/Testcontainers (daemon not running, image pull, Enterprise license env). Ensure Docker is up and you can pull `neo4j:5.23-enterprise`.
-- Summary line: `N passed in Xs` means the assessment suite is green.
 
 `pytest.ini` sets `pythonpath = .` and `testpaths = tests` so imports resolve as `python.*`.
 
@@ -192,25 +215,29 @@ pytest tests/ -v
 
 ### Why MERGE everywhere (idempotency)
 
-Sample load and CDC-style writes use `MERGE` on unique business IDs with `ON CREATE SET` / `ON MATCH SET`, never bare `CREATE`. Re-running `01_sample_data.cypher` or replaying Kafka batches must not duplicate hubs or fail uniqueness constraints. Idempotent scripts are safe for CI, demos, and partial reloads.
+Sample load and CDC-style writes use `MERGE` on unique business IDs with `ON CREATE SET` / `ON MATCH SET`, never bare `CREATE`. Re-running `01_sample_data.cypher` must not duplicate hubs or fail uniqueness constraints. Idempotent scripts are safe for CI, demos, and partial reloads.
 
 ### Why relationship types over generic edges
 
-Typed edges (`DEPENDS_ON`, `READS_FROM`, `USES`, `AFFECTS`, `OWNS`, `SUBSCRIBED_TO`) encode semantics the planner and operators can filter on. A single generic `RELATED_TO` forces property filters, pollutes degree statistics, and breaks blast-radius correctness (e.g. product lineage `EXTENDS` must not look like runtime failure coupling). See `architecture/SCALE_DESIGN.md`.
+Typed edges (`DEPENDS_ON`, `READS_FROM`, `USES`, `AFFECTS`, and scale-model `EXTENDS` / `OWNS` / `SUBSCRIBED_TO`) encode semantics the planner can filter on. A single generic `RELATED_TO` forces property filters and breaks blast-radius correctness. See `architecture/SCALE_DESIGN.md` and `docs/GRAPH_MODEL.md`.
 
 ### Why typed Python dataclasses (not raw dicts)
 
-`python/models.py` exposes frozen dataclasses with `from_record` / `to_dict`. Callers get named fields, null checks via `DataError`, and stable JSON shapes—avoiding silent key typos and `record["col"]` drift when Cypher aliases change. The driver layer stays thin; domain shape lives in models.
+`python/models.py` exposes frozen dataclasses with `from_record` / `to_dict`. Callers get named fields, null checks via `DataError`, and stable JSON shapes—avoiding silent key typos when Cypher aliases change.
+
+### Why a FastAPI BFF (not browser → Bolt)
+
+The console never holds Neo4j credentials. The BFF owns sessions, serialization, allowlisted query execution, and Prometheus proxying. See `python/api/` and `docs/CONSOLE.md`.
 
 ### Why pre-computation for blast radius at scale
 
-At ~5M nodes / ~100M relationships, a live inbound APOC expansion plus customer fan-out targets ~**500 ms P90** with a warm cache. Tier-1 services are recomputed on a schedule (`apoc.periodic.iterate` in `architecture/scale_model.cypher`) into `blast_radius_*` properties so incident UIs pay ~**1–5 ms** for a property read, accepting bounded staleness (typically 6h) under pager load.
+At ~5M nodes / ~100M relationships, a live inbound expansion plus customer fan-out targets ~**500 ms P90** with a warm cache. Tier-1 services can be recomputed on a schedule into `blast_radius_*` properties so incident UIs pay ~**1–5 ms** for a property read. See `architecture/scale_model.cypher`.
 
 ---
 
 ## Performance Reference
 
-Times below are for the **lab sample graph** unless noted. Production blast-radius SLO is from the scale design.
+Times below are for the **sample graph** unless noted. Production blast-radius SLO is from the scale design.
 
 | Query | Expected Execution Time | Index Used | Optimization Technique |
 |---|---|---|---|
@@ -222,7 +249,7 @@ Times below are for the **lab sample graph** unless noted. Production blast-radi
 | Blast radius (precomputed) | ~1–5 ms | `Service.serviceId` unique | Property read of `blast_radius_*` |
 | Tier-1 pre-compute job | Batch / analytics replica | `Service.tier` range | `apoc.periodic.iterate` batchSize 100 |
 
-Tuning depth: [`cypher/performance/query_tuning_notes.md`](cypher/performance/query_tuning_notes.md).
+Tuning depth: [`cypher/performance/query_tuning_notes.md`](cypher/performance/query_tuning_notes.md), [`docs/PERFORMANCE_ANALYSIS.md`](docs/PERFORMANCE_ANALYSIS.md).
 
 ---
 
@@ -230,46 +257,46 @@ Tuning depth: [`cypher/performance/query_tuning_notes.md`](cypher/performance/qu
 
 ```text
 neo4j-enterprise-assessment/
-├── .env.example                          # Env template (Neo4j, Datadog, backup URI)
-├── .gitignore                            # Python, Neo4j data dirs, .env, IDE noise
+├── .env.example                          # Env template (Neo4j, API, Datadog, backup)
+├── .gitignore
 ├── README.md                             # This document
-├── docker-compose.yml                    # Neo4j 5.23 Enterprise + Prometheus
-├── pytest.ini                            # Pytest paths and warning filters
+├── docker-compose.yml                    # Neo4j + Prometheus + API + frontend
+├── pytest.ini
 │
 ├── admin/
 │   ├── backup.sh                         # Online backup helper
 │   ├── restore.sh                        # Restore from backup artifact
-│   ├── cluster_health_check.sh           # Raft / member health checks
+│   ├── cluster_health_check.sh           # Bolt / role / member health checks
 │   ├── rbac_setup.cypher                 # Roles and GRANTs
-│   └── troubleshooting_runbook.md        # Production incident triage
+│   └── troubleshooting_runbook.md        # Incident triage
 │
 ├── architecture/
 │   ├── SCALE_DESIGN.md                   # Scale architecture (5M/100M, HA, capacity)
-│   └── scale_model.cypher                # Scale schema, blast radius, pre-compute, SPOF
+│   └── scale_model.cypher                # Scale schema, blast radius, pre-compute
 │
 ├── .github/workflows/
-│   ├── neo4j-validate.yml                # CI validation workflow
-│   └── neo4j-deploy.yml                  # Production deploy + rollback
+│   ├── neo4j-validate.yml                # CI: Cypher lint, Neo4j tests, frontend build
+│   └── neo4j-deploy.yml                  # Manual production deploy + rollback
 │
 ├── cypher/
-│   ├── 00_constraints_indexes.cypher     # Lab uniqueness, existence, range indexes
+│   ├── 00_constraints_indexes.cypher     # Uniqueness, existence, range indexes
 │   ├── 01_sample_data.cypher             # Idempotent MERGE sample graph
-│   ├── migrations/                       # Reserved for schema migrations
+│   ├── migrations/                       # Versioned schema migrations
 │   ├── performance/
-│   │   ├── explain_profile_analysis.cypher  # EXPLAIN/PROFILE teaching queries
-│   │   └── query_tuning_notes.md         # Memory, indexes, query-log reference
-│   └── queries/
-│       ├── q1_finance_apps.cypher        # Apps used by a department
-│       ├── q2_employee_chain.cypher      # Employee → apps → services → DBs
-│       ├── q3_high_incident_apps.cypher  # Apps with most incidents
-│       ├── q4_db_impact_analysis.cypher  # Blast radius from a database
-│       ├── q5_dependency_paths.cypher    # Bounded app→DB dependency paths
-│       ├── q6_top_apps_by_users.cypher   # Top apps by distinct users
-│       ├── q7_shared_db_employees.cypher # Employees sharing a database path
-│       ├── q8_no_incidents.cypher        # Apps with no incident history
-│       └── q9_full_downstream_chain.cypher # Full downstream dependency chain
+│   │   ├── explain_profile_analysis.cypher
+│   │   └── query_tuning_notes.md
+│   └── queries/                          # Parameterized operational queries q1–q9
 │
-├── docs/                                 # Extra documentation (placeholder)
+├── docs/
+│   ├── CONSOLE.md                        # Frontend + BFF local development
+│   ├── GRAPH_MODEL.md                    # Modeling notes
+│   ├── HA_CLUSTERING.md                  # High availability & clustering
+│   └── PERFORMANCE_ANALYSIS.md           # EXPLAIN/PROFILE guidance
+│
+├── frontend/                             # React operations console (Vite)
+│   ├── src/pages/                        # Overview, Graph, Impact, Apps, Ops, Queries
+│   ├── src/api/                          # Typed HTTP client for /api/v1
+│   └── Dockerfile
 │
 ├── monitoring/
 │   ├── prometheus.yml                    # Scrape Neo4j :2004 metrics
@@ -278,18 +305,19 @@ neo4j-enterprise-assessment/
 │   └── datadog_alerts.json               # Datadog monitor definitions
 │
 ├── python/
-│   ├── __init__.py                       # Package marker
-│   ├── exceptions.py                     # Client / data error types
-│   ├── models.py                         # Frozen dataclasses for query results
-│   ├── neo4j_client.py                   # Driver wrapper and connectivity
+│   ├── api/                              # FastAPI BFF (routers, services, schemas)
+│   ├── neo4j_client.py                   # Driver wrapper
 │   ├── queries.py                        # Typed query helpers
-│   └── requirements.txt                  # Pinned neo4j, pytest, testcontainers
+│   ├── models.py                         # Frozen result dataclasses
+│   ├── exceptions.py                     # Client / data error types
+│   └── requirements.txt
 │
 └── tests/
-    ├── __init__.py                       # Test package marker
-    ├── conftest.py                       # Enterprise Testcontainers + seed fixtures
-    ├── test_constraints.py               # Constraint / schema tests
-    ├── test_queries.py                   # Cypher q1–q9 behavioral tests
-    ├── test_python_client.py             # Python client integration tests
-    └── test_performance.py               # EXPLAIN index-seek assertions
+    ├── conftest.py                       # Testcontainers Neo4j + seed fixtures
+    ├── test_constraints.py
+    ├── test_queries.py
+    ├── test_python_client.py
+    └── test_performance.py
 ```
+
+Authoritative CI workflows live in `.github/workflows/`.

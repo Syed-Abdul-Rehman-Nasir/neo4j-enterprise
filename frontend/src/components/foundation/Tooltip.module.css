@@ -1,0 +1,3 @@
+.wrap { position: relative; display: inline-flex; }
+.tip { position: absolute; z-index: 20; bottom: calc(100% + 0.5rem); left: 50%; min-width: 12rem; transform: translateX(-50%); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3); color: var(--text-primary); background: var(--surface-panel-strong); box-shadow: var(--shadow-soft); font-size: 0.82rem; opacity: 0; pointer-events: none; transition: opacity var(--transition-base); }
+.wrap:hover .tip, .wrap:focus-within .tip { opacity: 1; }

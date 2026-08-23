@@ -1,0 +1,8 @@
+.graph { height: 42rem; border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); background: #11100e; overflow: hidden; }
+.controls { display: grid; gap: var(--space-3); }
+.chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.chip { border: 1px solid var(--border-subtle); border-radius: 999px; padding: 0.4rem 0.7rem; color: var(--text-secondary); background: var(--surface-inset); cursor: pointer; }
+.chipActive { color: var(--text-inverse); background: var(--color-chartreuse-400); }
+.legendDot { width: 0.75rem; height: 0.75rem; border-radius: 999px; display: inline-block; margin-right: var(--space-2); }
+.drawer { position: sticky; top: var(--space-4); }
+.props { overflow: auto; max-height: 18rem; }

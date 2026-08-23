@@ -1,0 +1,83 @@
+:root {
+  /* Warm mineral + chartreuse signal system */
+  --color-mineral-950: #151411;
+  --color-mineral-900: #1d1b17;
+  --color-mineral-850: #26231d;
+  --color-mineral-800: #302c24;
+  --color-mineral-700: #453f34;
+  --color-mineral-600: #62594a;
+  --color-mineral-500: #847866;
+  --color-mineral-400: #a99d88;
+  --color-mineral-300: #cfc3ad;
+  --color-mineral-200: #e8ddc8;
+  --color-mineral-100: #f6eedf;
+  --color-mineral-050: #fcf8ef;
+
+  --color-chartreuse-900: #263a05;
+  --color-chartreuse-700: #5f8f13;
+  --color-chartreuse-500: #a7d129;
+  --color-chartreuse-400: #c8f23a;
+  --color-chartreuse-300: #daf96a;
+  --color-chartreuse-100: #f0ffd0;
+
+  --color-sky-signal: #7cc7ff;
+  --color-copper-signal: #d98b54;
+  --color-ruby-signal: #ff5f6d;
+  --color-amber-signal: #ffc857;
+  --color-emerald-signal: #4ad295;
+  --color-violet-signal: #ad8cff;
+
+  --node-employee: #7cc7ff;
+  --node-department: #ad8cff;
+  --node-application: #c8f23a;
+  --node-service: #ffc857;
+  --node-database: #ff8f70;
+  --node-server: #8bd3c7;
+  --node-incident: #ff5f6d;
+
+  --edge-belongs-to: #9fb0c0;
+  --edge-uses: #c8f23a;
+  --edge-depends-on: #ffc857;
+  --edge-reads-from: #ff8f70;
+  --edge-hosted-on: #8bd3c7;
+  --edge-affects: #ff5f6d;
+  --edge-extends: #ad8cff;
+
+  --surface-body: var(--color-mineral-950);
+  --surface-shell: #1a1814;
+  --surface-panel: #221f1a;
+  --surface-panel-strong: #2e2a23;
+  --surface-card: rgba(48, 44, 36, 0.82);
+  --surface-card-hover: rgba(69, 63, 52, 0.92);
+  --surface-inset: rgba(21, 20, 17, 0.72);
+  --border-subtle: rgba(232, 221, 200, 0.12);
+  --border-strong: rgba(232, 221, 200, 0.26);
+  --text-primary: #fcf8ef;
+  --text-secondary: #d8cdb8;
+  --text-muted: #a99d88;
+  --text-inverse: #151411;
+  --focus-ring: 0 0 0 3px rgba(200, 242, 58, 0.35);
+
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --font-display: 'Space Grotesk', 'IBM Plex Sans', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'Cascadia Code', monospace;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+
+  --radius-xs: 0.375rem;
+  --radius-sm: 0.625rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.25rem;
+  --radius-xl: 1.75rem;
+  --shadow-soft: 0 18px 60px rgba(0, 0, 0, 0.28);
+  --shadow-signal: 0 0 34px rgba(200, 242, 58, 0.18);
+  --transition-base: 180ms ease;
+}

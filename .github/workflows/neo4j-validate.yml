@@ -11,8 +11,8 @@ on:
       - "python/**"
       - "tests/**"
       - "scripts/**"
+      - "frontend/**"
       - ".github/workflows/neo4j-validate.yml"
-      - "ci/.github/workflows/neo4j-validate.yml"
 
 env:
   NEO4J_URI: bolt://localhost:7687
@@ -70,6 +70,9 @@ jobs:
 
       - name: Install Python dependencies
         run: pip install -r python/requirements.txt
+
+      - name: API unit tests (no Neo4j)
+        run: python -m pytest python/api/tests -q --tb=short
 
       - name: Install cypher-shell
         run: |
@@ -228,3 +231,29 @@ jobs:
           for v in versions:
               print(f"  {v[3]}")
           PY
+
+  frontend:
+    name: Frontend lint/typecheck/test/build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck + build
+        run: npm run build
+
+      - name: Unit tests
+        run: npm run test

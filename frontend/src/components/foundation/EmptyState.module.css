@@ -1,0 +1,2 @@
+.empty { border: 1px dashed var(--border-strong); border-radius: var(--radius-lg); padding: var(--space-8); text-align: center; color: var(--text-secondary); background: rgba(21, 20, 17, 0.38); }
+.title { margin: var(--space-3) 0 var(--space-2); color: var(--text-primary); font-family: var(--font-display); }

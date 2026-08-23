@@ -1,0 +1,21 @@
+export const queryKeys = {
+  overview: ['overview'] as const,
+  metaModel: ['metaModel'] as const,
+  graph: (filters: Record<string, unknown>) => ['graph', filters] as const,
+  node: (label: string, id: string) => ['node', label, id] as const,
+  catalog: (kind: string) => ['catalog', kind] as const,
+  impact: (databaseId: string) => ['impact', databaseId] as const,
+  paths: (applicationId: string, databaseId: string) => ['paths', applicationId, databaseId] as const,
+  highIncidents: (minIncidents: number) => ['highIncidents', minIncidents] as const,
+  incidents: (filters: Record<string, unknown>) => ['incidents', filters] as const,
+  noIncidents: (asOf?: string | null) => ['noIncidents', asOf] as const,
+  downstream: (applicationId: string) => ['downstream', applicationId] as const,
+  topApplications: (limit: number) => ['topApplications', limit] as const,
+  operationsSummary: ['operationsSummary'] as const,
+  operationsMetrics: (metrics: string, window: string, step: string) => ['operationsMetrics', metrics, window, step] as const,
+  operationsAlerts: ['operationsAlerts'] as const,
+  operationsRunbook: ['operationsRunbook'] as const,
+  queries: ['queries'] as const,
+  query: (queryId: string) => ['query', queryId] as const,
+  queryExecution: (queryId: string, params: Record<string, unknown>) => ['queryExecution', queryId, params] as const
+};

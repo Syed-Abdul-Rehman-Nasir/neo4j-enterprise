@@ -1,0 +1,4 @@
+.page { display: grid; gap: var(--space-6); max-width: 1440px; margin: 0 auto; }
+.header { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-4); }
+.title { font-size: clamp(2rem, 4vw, 4rem); }
+.description { max-width: 48rem; margin-top: var(--space-3); }

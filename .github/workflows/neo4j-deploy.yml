@@ -1,15 +1,14 @@
 # Neo4j Production Deploy
-# Runs after merge to main. Backs up first, applies idempotent schema + ordered
-# migrations, smoke-tests, and notifies Datadog. On failure, rolls back and opens an issue.
+# Manually triggered for production releases. Backs up first, applies idempotent
+# schema + ordered migrations, smoke-tests, and notifies Datadog. On failure,
+# rolls back and opens an issue.
 name: Neo4j Production Deploy
 
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
-# Never cancel an in-progress production deploy when a newer push lands.
-# Mid-flight schema/migration work must finish or roll back cleanly — cancelling
-# leaves the cluster in an unknown partial state.
+# Never cancel an in-progress production deploy when another dispatch starts.
+# Mid-flight schema/migration work must finish or roll back cleanly.
 concurrency:
   group: production-deploy
   cancel-in-progress: false

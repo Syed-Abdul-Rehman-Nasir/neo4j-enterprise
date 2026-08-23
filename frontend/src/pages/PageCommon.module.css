@@ -1,0 +1,20 @@
+.grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-4); }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+.card { border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: var(--space-5); background: var(--surface-card); box-shadow: var(--shadow-soft); min-width: 0; }
+.cardInteractive { transition: transform var(--transition-base), background var(--transition-base), border-color var(--transition-base); }
+.cardInteractive:hover { transform: translateY(-2px); border-color: var(--border-strong); background: var(--surface-card-hover); }
+.metric { margin: var(--space-3) 0 0; font-family: var(--font-display); font-size: clamp(2rem, 4vw, 3.4rem); letter-spacing: -0.06em; }
+.label { color: var(--text-muted); font-size: 0.86rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.stack { display: grid; gap: var(--space-4); }
+.list { display: grid; gap: var(--space-3); margin: 0; padding: 0; list-style: none; }
+.item { border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: var(--space-4); background: var(--surface-inset); }
+.table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: var(--radius-md); }
+.table th, .table td { border-bottom: 1px solid var(--border-subtle); padding: var(--space-3); text-align: left; vertical-align: top; }
+.table th { color: var(--text-muted); font-size: 0.76rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.input, .select, .textarea { width: 100%; border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: var(--space-3); color: var(--text-primary); background: var(--surface-inset); }
+.textarea { min-height: 14rem; resize: vertical; font-family: var(--font-mono); font-size: 0.86rem; }
+.input:focus, .select:focus, .textarea:focus { outline: none; box-shadow: var(--focus-ring); }
+.code { overflow: auto; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: var(--space-4); background: #11100e; color: var(--color-mineral-100); font-size: 0.82rem; line-height: 1.5; }
+@media (max-width: 1050px) { .grid4, .grid3, .grid2 { grid-template-columns: 1fr; } }
